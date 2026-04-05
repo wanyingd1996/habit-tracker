@@ -1,0 +1,6 @@
+.DS_Store
+*.json
+habit-*/
+.claude/
+serve.py
+habit-tracker.jsx
