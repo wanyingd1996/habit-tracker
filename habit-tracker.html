@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Habit Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+
+    .bg-violet-500 { background-color: #8b5cf6; } .bg-violet-100 { background-color: #ede9fe; }
+    .text-violet-700 { color: #6d28d9; } .border-violet-400 { border-color: #a78bfa; }
+    .bg-sky-500 { background-color: #0ea5e9; } .bg-sky-100 { background-color: #e0f2fe; }
+    .text-sky-700 { color: #0369a1; } .border-sky-400 { border-color: #38bdf8; }
+    .bg-emerald-500 { background-color: #10b981; } .bg-emerald-100 { background-color: #d1fae5; }
+    .text-emerald-700 { color: #047857; } .border-emerald-400 { border-color: #34d399; }
+    .bg-rose-500 { background-color: #f43f5e; } .bg-rose-100 { background-color: #ffe4e6; }
+    .text-rose-700 { color: #be123c; } .border-rose-400 { border-color: #fb7185; }
+    .bg-amber-500 { background-color: #f59e0b; } .bg-amber-100 { background-color: #fef3c7; }
+    .text-amber-700 { color: #b45309; } .border-amber-400 { border-color: #fbbf24; }
+    .bg-pink-500 { background-color: #ec4899; } .bg-pink-100 { background-color: #fce7f3; }
+    .text-pink-700 { color: #be185d; } .border-pink-400 { border-color: #f472b6; }
+    .bg-teal-500 { background-color: #14b8a6; } .bg-teal-100 { background-color: #ccfbf1; }
+    .text-teal-700 { color: #0f766e; } .border-teal-400 { border-color: #2dd4bf; }
+    .bg-orange-500 { background-color: #f97316; } .bg-orange-100 { background-color: #ffedd5; }
+    .text-orange-700 { color: #c2410c; } .border-orange-400 { border-color: #fb923c; }
+    .transition-all { transition: all 0.15s ease; }
+    .sidebar { width: 256px; min-width: 256px; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useRef, useEffect } = React;
+
+    const COLORS = [
+      { bg:"bg-violet-500", light:"bg-violet-100", text:"text-violet-700", border:"border-violet-400", hex:"#8b5cf6" },
+      { bg:"bg-sky-500",    light:"bg-sky-100",    text:"text-sky-700",    border:"border-sky-400",    hex:"#0ea5e9" },
+      { bg:"bg-emerald-500",light:"bg-emerald-100",text:"text-emerald-700",border:"border-emerald-400",hex:"#10b981" },
+      { bg:"bg-rose-500",   light:"bg-rose-100",   text:"text-rose-700",   border:"border-rose-400",   hex:"#f43f5e" },
+      { bg:"bg-amber-500",  light:"bg-amber-100",  text:"text-amber-700",  border:"border-amber-400",  hex:"#f59e0b" },
+      { bg:"bg-pink-500",   light:"bg-pink-100",   text:"text-pink-700",   border:"border-pink-400",   hex:"#ec4899" },
+      { bg:"bg-teal-500",   light:"bg-teal-100",   text:"text-teal-700",   border:"border-teal-400",   hex:"#14b8a6" },
+      { bg:"bg-orange-500", light:"bg-orange-100", text:"text-orange-700", border:"border-orange-400", hex:"#f97316" },
+    ];
+    const EMOJIS = ["📰","🤖","🏃","📚","🧘","💧","🎸","✍️","🍎","💻","🌿","🎨"];
+    const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+
+    function toDateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+
+    function defaultHabits() {
+      const start = toDateKey(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+      return [
+        { id:1, name:"Read the News", emoji:"📰", colorIdx:0, logs:{}, createdAt:start, totalDays:0, totalSessions:0, dailyTarget:0, lastSessionDate:'', todaySessions:0 },
+        { id:2, name:"AI Course",     emoji:"🤖", colorIdx:1, logs:{}, createdAt:start, totalDays:0, totalSessions:0, dailyTarget:0, lastSessionDate:'', todaySessions:0 },
+        { id:3, name:"Exercise",      emoji:"🏃", colorIdx:2, logs:{}, createdAt:start, totalDays:0, totalSessions:0, dailyTarget:0, lastSessionDate:'', todaySessions:0 },
+      ];
+    }
+
+    // ── IndexedDB ──────────────────────────────────────────────────────
+    const IDB_NAME='habit-tracker-db', IDB_STORE='handles';
+    function openIDB() {
+      return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_NAME,1); r.onupgradeneeded=()=>r.result.createObjectStore(IDB_STORE); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+    }
+    async function getStoredDirHandle() {
+      try { const db=await openIDB(); return await new Promise(res=>{ const tx=db.transaction(IDB_STORE,'readonly'); const r=tx.objectStore(IDB_STORE).get('backup-dir'); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }); } catch { return null; }
+    }
+    async function storeDirHandle(h) {
+      const db=await openIDB(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(h,'backup-dir'); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); });
+    }
+
+    // ── File I/O ───────────────────────────────────────────────────────
+    async function getHabitDir(dir, id, create=false) { return dir.getDirectoryHandle(`habit-${id}`,{create}); }
+
+    async function writeAppJson(dir, nextId, habitIds) {
+      const fh=await dir.getFileHandle('app.json',{create:true}); const w=await fh.createWritable();
+      await w.write(JSON.stringify({nextId,habitIds,updatedAt:new Date().toISOString()},null,2)); await w.close();
+    }
+    async function writeHabitMeta(dir, habit) {
+      const {logs,...meta}=habit; const hd=await getHabitDir(dir,habit.id,true);
+      const fh=await hd.getFileHandle('meta.json',{create:true}); const w=await fh.createWritable();
+      await w.write(JSON.stringify({...meta,savedAt:new Date().toISOString()},null,2)); await w.close();
+    }
+    async function writeHabitMonthLogs(dir, habit, monthKey) {
+      const ml={}; for(const[k,v]of Object.entries(habit.logs)) if(k.startsWith(monthKey)&&v) ml[k]=true;
+      const hd=await getHabitDir(dir,habit.id,true); const fh=await hd.getFileHandle(`logs-${monthKey}.json`,{create:true});
+      const w=await fh.createWritable(); await w.write(JSON.stringify(ml,null,2)); await w.close();
+    }
+    async function ensureSessionsDir(dir, habitId) {
+      const hd=await getHabitDir(dir,habitId,true); await hd.getDirectoryHandle('sessions',{create:true});
+    }
+    async function writeSessionRecord(dir, habitId, record) {
+      const mk=(record.endedAt||new Date().toISOString()).slice(0,7);
+      const hd=await getHabitDir(dir,habitId,true); const sd=await hd.getDirectoryHandle('sessions',{create:true});
+      const fh=await sd.getFileHandle(`${mk}.json`,{create:true});
+      let sessions=[]; try{ sessions=JSON.parse(await(await fh.getFile()).text()); }catch{}
+      if(!Array.isArray(sessions)) sessions=[];
+      sessions.push(record);
+      const w=await fh.createWritable(); await w.write(JSON.stringify(sessions,null,2)); await w.close();
+    }
+    async function loadAllSessionsForHabit(dir, habitId) {
+      const sessions=[];
+      try {
+        const hd=await getHabitDir(dir,habitId); let sd;
+        try{ sd=await hd.getDirectoryHandle('sessions'); }catch{ return []; }
+        for await(const[name,fh]of sd.entries()) {
+          if(fh.kind==='file'&&/^\d{4}-\d{2}\.json$/.test(name)) {
+            try{ const d=JSON.parse(await(await fh.getFile()).text()); if(Array.isArray(d)) sessions.push(...d); }catch{}
+          }
+        }
+      } catch{}
+      return sessions.sort((a,b)=>(b.endedAt||'').localeCompare(a.endedAt||''));
+    }
+
+    async function loadFromDir(dir) {
+      let nextId=4, habitIds=null;
+      try{ const fh=await dir.getFileHandle('app.json'); const d=JSON.parse(await(await fh.getFile()).text()); nextId=d.nextId||4; habitIds=Array.isArray(d.habitIds)?d.habitIds:null; }catch{}
+      if(!habitIds) {
+        const m=await migrateOldFormat(dir);
+        if(m) {
+          await writeAppJson(dir,m.nextId,m.habits.map(h=>h.id));
+          for(const h of m.habits){ await writeHabitMeta(dir,h); const mks=[...new Set(Object.keys(h.logs).map(k=>k.slice(0,7)))]; for(const mk of mks) await writeHabitMonthLogs(dir,h,mk); await ensureSessionsDir(dir,h.id); }
+          return m;
+        }
+        return {habits:defaultHabits(),nextId:4};
+      }
+      const habits=[];
+      for(const id of habitIds) {
+        try {
+          const hd=await getHabitDir(dir,id);
+          const meta=JSON.parse(await(await(await hd.getFileHandle('meta.json')).getFile()).text());
+          const habit={...meta,logs:{}};
+          for await(const[name,fh]of hd.entries()) if(fh.kind==='file'&&/^logs-\d{4}-\d{2}\.json$/.test(name)) { try{ Object.assign(habit.logs,JSON.parse(await(await fh.getFile()).text())); }catch{} }
+          if(habit.totalDays===undefined) habit.totalDays=Object.values(habit.logs).filter(Boolean).length;
+          if(habit.totalSessions===undefined) habit.totalSessions=0;
+          if(habit.dailyTarget===undefined) habit.dailyTarget=0;
+          if(!habit.lastSessionDate) habit.lastSessionDate='';
+          if(habit.todaySessions===undefined) habit.todaySessions=0;
+          habits.push(habit);
+        } catch{}
+      }
+      return {habits:habits.length>0?habits:defaultHabits(),nextId};
+    }
+
+    async function migrateOldFormat(dir) {
+      try {
+        const fh=await dir.getFileHandle('habit-tracker-meta.json');
+        const meta=JSON.parse(await(await fh.getFile()).text());
+        if(!meta.habits||!Array.isArray(meta.habits)) return null;
+        const habits=meta.habits.map(h=>({...h,logs:{},dailyTarget:0,lastSessionDate:'',todaySessions:0}));
+        for await(const[name,handle]of dir.entries()) {
+          if(handle.kind==='file'&&/^habit-tracker-\d{4}-\d{2}\.json$/.test(name)) {
+            try{ const md=JSON.parse(await(await handle.getFile()).text()); for(const[hid,logs]of Object.entries(md)){ const h=habits.find(h=>String(h.id)===hid); if(h) Object.assign(h.logs,logs); } }catch{}
+          }
+        }
+        for(const h of habits){ if(h.totalDays===undefined) h.totalDays=Object.values(h.logs).filter(Boolean).length; if(h.totalSessions===undefined) h.totalSessions=0; }
+        return {habits,nextId:meta.nextId||habits.length+1};
+      } catch{ return null; }
+    }
+
+    // ── App ────────────────────────────────────────────────────────────
+    function App() {
+      const [habits, setHabitsRaw]       = useState(defaultHabits);
+      const [nextId, setNextIdRaw]        = useState(4);
+      const [selectedId, setSelectedId]  = useState(1);
+      const [viewMonth, setViewMonth]    = useState(todayDate.getMonth());
+      const [viewYear, setViewYear]      = useState(todayDate.getFullYear());
+      const [showModal, setShowModal]    = useState(false);
+      const [newName, setNewName]        = useState("");
+      const [newEmoji, setNewEmoji]      = useState("📚");
+      const [newColorIdx, setNewColorIdx]= useState(3);
+      const [view, setView]              = useState('home');
+      const [detailTab, setDetailTab]    = useState('calendar');
+
+      // Timer state — phase: 'idle'|'selecting'|'running'|'done'|'break'|'break-done'
+      const [timerPhase, setTimerPhase]         = useState('idle');
+      const [timerHabitId, setTimerHabitId]     = useState(null);
+      const [timerSecondsLeft, setTimerSecondsLeft] = useState(25*60);
+      const [timerDuration, setTimerDuration]   = useState(25);
+      const [timerTag, setTimerTag]             = useState('');
+      const [sessionNote, setSessionNote]       = useState('');
+      const [pendingSession, setPendingSession] = useState(null);
+      const [breakDuration, setBreakDuration]   = useState(5);
+
+      // Sessions log state
+      const [loadedSessions, setLoadedSessions] = useState([]);
+      const [sessionsLoading, setSessionsLoading] = useState(false);
+
+      // Notification permission
+      const [notifPermission, setNotifPermission] = useState(() => typeof Notification!=='undefined' ? Notification.permission : 'denied');
+
+      // Backup state
+      const [backupStatus, setBackupStatus]   = useState('initializing');
+      const [backupDirName, setBackupDirName] = useState('');
+
+      // Refs
+      const dirHandleRef       = useRef(null);
+      const dirReadyRef        = useRef(false);
+      const habitsRef          = useRef(defaultHabits());
+      const nextIdRef          = useRef(4);
+      const timerEndTimeRef    = useRef(null);
+      const timerHabitIdRef    = useRef(null);
+      const timerIntervalRef   = useRef(null);
+      const timerDurationRef   = useRef(25);
+      const timerTagRef        = useRef('');
+      const sessionStartTimeRef= useRef(null);
+      const sessionCountRef    = useRef({});
+
+      // ── Backup init ──────────────────────────────────────────────────
+      useEffect(() => { if(!window.showDirectoryPicker){setBackupStatus('no-api');return;} initBackup(); }, []);
+
+      async function initBackup() {
+        const handle=await getStoredDirHandle();
+        if(!handle){setBackupStatus('needs-setup');return;}
+        try {
+          const perm=await handle.queryPermission({mode:'readwrite'});
+          if(perm==='granted') await activateDir(handle);
+          else { dirHandleRef.current=handle; setBackupDirName(handle.name); setBackupStatus('needs-permission'); }
+        } catch{ setBackupStatus('needs-setup'); }
+      }
+
+      async function activateDir(handle) {
+        dirHandleRef.current=handle; setBackupDirName(handle.name);
+        try {
+          const {habits:loaded,nextId:lid}=await loadFromDir(handle);
+          habitsRef.current=loaded; nextIdRef.current=lid;
+          setHabitsRaw(loaded); setNextIdRaw(lid); setSelectedId(loaded[0]?.id||1);
+        } catch{}
+        dirReadyRef.current=true; setBackupStatus('active');
+      }
+
+      async function setupBackup() {
+        try {
+          if(backupStatus==='needs-permission'&&dirHandleRef.current) {
+            const perm=await dirHandleRef.current.requestPermission({mode:'readwrite'});
+            if(perm==='granted') await activateDir(dirHandleRef.current); return;
+          }
+          const handle=await window.showDirectoryPicker({mode:'readwrite'});
+          await storeDirHandle(handle); await activateDir(handle);
+          const hs=habitsRef.current;
+          await writeAppJson(handle,nextIdRef.current,hs.map(h=>h.id));
+          for(const h of hs){ await writeHabitMeta(handle,h); await ensureSessionsDir(handle,h.id); }
+        } catch(e){ if(e.name!=='AbortError') setBackupStatus('needs-setup'); }
+      }
+
+      const canSave=()=>!!(dirHandleRef.current&&dirReadyRef.current);
+
+      function saveMonthLogs(habit,monthKey){ if(!canSave())return; writeHabitMonthLogs(dirHandleRef.current,habit,monthKey).catch(console.error); }
+      function saveHabitMeta(habit){ if(!canSave())return; writeHabitMeta(dirHandleRef.current,habit).catch(console.error); }
+      function saveAppJson(){ if(!canSave())return; writeAppJson(dirHandleRef.current,nextIdRef.current,habitsRef.current.map(h=>h.id)).catch(console.error); }
+
+      // ── Calendar helpers ────────────────────────────────────────────
+      const selectedHabit = habits.find(h=>h.id===selectedId);
+      const color = selectedHabit ? COLORS[selectedHabit.colorIdx] : COLORS[0];
+      const daysInMonth = new Date(viewYear,viewMonth+1,0).getDate();
+      const firstDay = new Date(viewYear,viewMonth,1).getDay();
+
+      const calendarDays = useMemo(()=>{
+        const days=[];
+        for(let i=0;i<firstDay;i++) days.push(null);
+        for(let d=1;d<=daysInMonth;d++) days.push(d);
+        return days;
+      },[viewYear,viewMonth,firstDay,daysInMonth]);
+
+      function toggleDay(day) {
+        if(!day) return;
+        const date=new Date(viewYear,viewMonth,day); date.setHours(0,0,0,0);
+        if(date>todayDate) return;
+        const key=toDateKey(date); const monthKey=key.slice(0,7);
+        setHabitsRaw(prev=>{
+          const next=prev.map(h=>{
+            if(h.id!==selectedId) return h;
+            const logs={...h.logs}; const wasDone=!!logs[key];
+            if(wasDone) delete logs[key]; else logs[key]=true;
+            return{...h,logs,totalDays:(h.totalDays||0)+(wasDone?-1:1)};
+          });
+          habitsRef.current=next;
+          const upd=next.find(h=>h.id===selectedId);
+          if(upd){saveMonthLogs(upd,monthKey);saveHabitMeta(upd);}
+          return next;
+        });
+      }
+
+      function toggleToday(habitId) {
+        const key=toDateKey(todayDate); const monthKey=key.slice(0,7);
+        setHabitsRaw(prev=>{
+          const next=prev.map(h=>{
+            if(h.id!==habitId) return h;
+            const logs={...h.logs}; const wasDone=!!logs[key];
+            if(wasDone) delete logs[key]; else logs[key]=true;
+            return{...h,logs,totalDays:(h.totalDays||0)+(wasDone?-1:1)};
+          });
+          habitsRef.current=next;
+          const upd=next.find(h=>h.id===habitId);
+          if(upd){saveMonthLogs(upd,monthKey);saveHabitMeta(upd);}
+          return next;
+        });
+      }
+
+      function prevMonth(){ if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1); }
+      function nextMonth(){
+        const nm=viewMonth===11?0:viewMonth+1; const ny=viewMonth===11?viewYear+1:viewYear;
+        if(ny>todayDate.getFullYear()||(ny===todayDate.getFullYear()&&nm>todayDate.getMonth())) return;
+        setViewMonth(nm); setViewYear(ny);
+      }
+      const isNextDisabled=viewYear>todayDate.getFullYear()||(viewYear===todayDate.getFullYear()&&viewMonth>=todayDate.getMonth());
+
+      function isToday(day){ return day===todayDate.getDate()&&viewMonth===todayDate.getMonth()&&viewYear===todayDate.getFullYear(); }
+      function isFuture(day){ if(!day)return false; return new Date(viewYear,viewMonth,day)>todayDate; }
+      function isDone(day){ if(!day||!selectedHabit)return false; return !!selectedHabit.logs[toDateKey(new Date(viewYear,viewMonth,day))]; }
+
+      // ── Notifications ───────────────────────────────────────────────
+      function fireNotification(title,body) {
+        if(typeof Notification==='undefined'||Notification.permission!=='granted') return;
+        try{ new Notification(title,{body}); }catch{}
+      }
+      async function requestNotifPermission() {
+        if(typeof Notification==='undefined') return;
+        const p=await Notification.requestPermission();
+        setNotifPermission(p);
+      }
+
+      // ── Pomodoro helpers ────────────────────────────────────────────
+      function formatTime(secs){ return `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`; }
+
+      function startPomodoro(habitId) {
+        const secs=timerDuration*60;
+        timerHabitIdRef.current=habitId;
+        timerDurationRef.current=timerDuration;
+        timerTagRef.current=timerTag;
+        sessionStartTimeRef.current=new Date().toISOString();
+        timerEndTimeRef.current=Date.now()+secs*1000;
+        setTimerHabitId(habitId);
+        setTimerSecondsLeft(secs);
+        setTimerPhase('running');
+        if(typeof Notification!=='undefined'&&Notification.permission==='default') requestNotifPermission();
+      }
+
+      function recordSession(habitId) {
+        const todayKey=toDateKey(todayDate);
+        setHabitsRaw(prev=>{
+          const next=prev.map(h=>{
+            if(h.id!==habitId) return h;
+            const sameDay=h.lastSessionDate===todayKey;
+            return{...h,totalSessions:(h.totalSessions||0)+1,lastSessionDate:todayKey,todaySessions:sameDay?(h.todaySessions||0)+1:1};
+          });
+          habitsRef.current=next;
+          const upd=next.find(h=>h.id===habitId);
+          if(upd) saveHabitMeta(upd);
+          return next;
+        });
+        sessionCountRef.current[habitId]=(sessionCountRef.current[habitId]||0)+1;
+        const ps={
+          id:`${habitId}-${Date.now()}`,habitId,
+          startedAt:sessionStartTimeRef.current||new Date().toISOString(),
+          endedAt:new Date().toISOString(),
+          durationMins:timerDurationRef.current||25,
+          tag:timerTagRef.current||'',
+        };
+        setPendingSession(ps);
+        const h=habitsRef.current.find(h=>h.id===habitId);
+        fireNotification('Session complete! 🍅',`+1 session for ${h?.name||'your habit'}. Take a break!`);
+      }
+
+      function startBreak() {
+        const count=sessionCountRef.current[timerHabitIdRef.current]||0;
+        const dur=count%4===0?15:5;
+        setBreakDuration(dur);
+        timerEndTimeRef.current=Date.now()+dur*60*1000;
+        setTimerSecondsLeft(dur*60);
+        setTimerPhase('break');
+      }
+
+      async function saveCurrentNote(note) {
+        if(!pendingSession) return;
+        const record={...pendingSession,note:(note||'').trim()};
+        setPendingSession(null); setSessionNote('');
+        if(canSave()) await writeSessionRecord(dirHandleRef.current,record.habitId,record).catch(console.error);
+      }
+
+      function cancelAll() {
+        clearInterval(timerIntervalRef.current);
+        setTimerPhase('idle'); setTimerHabitId(null);
+        setTimerSecondsLeft(25*60); setPendingSession(null); setSessionNote('');
+      }
+
+      // Running timer effect
+      useEffect(()=>{
+        if(timerPhase!=='running') return;
+        timerIntervalRef.current=setInterval(()=>{
+          const left=Math.max(0,Math.round((timerEndTimeRef.current-Date.now())/1000));
+          setTimerSecondsLeft(left);
+          if(left===0){ clearInterval(timerIntervalRef.current); recordSession(timerHabitIdRef.current); setTimerPhase('done'); }
+        },500);
+        return()=>clearInterval(timerIntervalRef.current);
+      },[timerPhase]);
+
+      // Break timer effect
+      useEffect(()=>{
+        if(timerPhase!=='break') return;
+        timerIntervalRef.current=setInterval(()=>{
+          const left=Math.max(0,Math.round((timerEndTimeRef.current-Date.now())/1000));
+          setTimerSecondsLeft(left);
+          if(left===0){ clearInterval(timerIntervalRef.current); fireNotification('Break over! 🎯','Time to focus. Ready for the next session?'); setTimerPhase('break-done'); }
+        },500);
+        return()=>clearInterval(timerIntervalRef.current);
+      },[timerPhase]);
+
+      // ── Daily target ────────────────────────────────────────────────
+      function updateDailyTarget(habitId, delta) {
+        setHabitsRaw(prev=>{
+          const next=prev.map(h=>{
+            if(h.id!==habitId) return h;
+            return{...h,dailyTarget:Math.max(0,(h.dailyTarget||0)+delta)};
+          });
+          habitsRef.current=next;
+          const upd=next.find(h=>h.id===habitId);
+          if(upd) saveHabitMeta(upd);
+          return next;
+        });
+      }
+
+      // ── Sessions log loading ────────────────────────────────────────
+      useEffect(()=>{
+        if(view!=='calendar'||detailTab!=='sessions') return;
+        const dh=dirHandleRef.current; const ready=dirReadyRef.current;
+        if(!dh||!ready){ setLoadedSessions([]); return; }
+        setSessionsLoading(true);
+        loadAllSessionsForHabit(dh,selectedId)
+          .then(s=>{ setLoadedSessions(s); setSessionsLoading(false); })
+          .catch(()=>{ setLoadedSessions([]); setSessionsLoading(false); });
+      },[view,detailTab,selectedId]);
+
+      // ── Stats ───────────────────────────────────────────────────────
+      const allStats = useMemo(()=>{
+        const ty=todayDate.getFullYear(), tm=todayDate.getMonth();
+        const dInM=new Date(ty,tm+1,0).getDate();
+        const mTotal=Array.from({length:dInM},(_,i)=>i+1).filter(d=>new Date(ty,tm,d)<=todayDate).length;
+        return habits.map(h=>{
+          let streak=0; const check=new Date(todayDate);
+          while(h.logs[toDateKey(check)]){streak++;check.setDate(check.getDate()-1);}
+          const mk=`${ty}-${String(tm+1).padStart(2,'0')}`;
+          const mDone=Object.keys(h.logs).filter(k=>k.startsWith(mk)&&h.logs[k]).length;
+          return{id:h.id,streak,monthDone:mDone,monthTotal:mTotal,rate:mTotal>0?Math.round(mDone/mTotal*100):0};
+        });
+      },[habits]);
+
+      const stats = useMemo(()=>{
+        if(!selectedHabit) return {};
+        const logs=selectedHabit.logs; const total=selectedHabit.totalDays||0;
+        let streak=0; let check=new Date(todayDate);
+        while(true){const k=toDateKey(check);if(logs[k]){streak++;check.setDate(check.getDate()-1);}else break;}
+        const mTotal=Array.from({length:daysInMonth},(_,i)=>i+1).filter(d=>new Date(viewYear,viewMonth,d)<=todayDate).length;
+        const mDone=Array.from({length:daysInMonth},(_,i)=>i+1).filter(d=>logs[toDateKey(new Date(viewYear,viewMonth,d))]).length;
+        const totalSessions=selectedHabit.totalSessions||0;
+        const avgSessionsPerDay=total>0?(totalSessions/total).toFixed(1):'—';
+        const todayKey=toDateKey(todayDate);
+        const todaySess=selectedHabit.lastSessionDate===todayKey?(selectedHabit.todaySessions||0):0;
+        const dailyTarget=selectedHabit.dailyTarget||0;
+        return{total,streak,monthTotal:mTotal,monthDone:mDone,rate:mTotal>0?Math.round(mDone/mTotal*100):0,totalSessions,avgSessionsPerDay,todaySessions:todaySess,dailyTarget};
+      },[selectedHabit,viewYear,viewMonth,daysInMonth]);
+
+      // ── Weekly digest (Mon–Sun of current week) ─────────────────────
+      const weeklyDigest = useMemo(()=>{
+        const dow=todayDate.getDay();
+        const monday=new Date(todayDate);
+        monday.setDate(todayDate.getDate()-(dow===0?6:dow-1));
+        const days=Array.from({length:7},(_,i)=>{
+          const d=new Date(monday); d.setDate(monday.getDate()+i);
+          return{key:toDateKey(d),label:['M','T','W','T','F','S','S'][i],isFuture:d>todayDate};
+        });
+        const todayKey=toDateKey(todayDate);
+        return habits.map(h=>{
+          const c=COLORS[h.colorIdx];
+          const todaySess=h.lastSessionDate===todayKey?(h.todaySessions||0):0;
+          return{id:h.id,emoji:h.emoji,name:h.name,colorIdx:h.colorIdx,hex:c.hex,
+            days:days.map(d=>({...d,done:!d.isFuture&&!!h.logs[d.key]})),
+            todaySessions:todaySess,dailyTarget:h.dailyTarget||0};
+        });
+      },[habits]);
+
+      // ── Heatmap (last 52 weeks, column-major Sun–Sat) ───────────────
+      const heatmapData = useMemo(()=>{
+        if(!selectedHabit) return{weeks:[],monthLabels:[]};
+        const startDate=new Date(todayDate);
+        startDate.setDate(todayDate.getDate()-52*7-todayDate.getDay());
+        const weeks=[]; const cursor=new Date(startDate);
+        for(let w=0;w<54;w++){
+          const week=[];
+          for(let d=0;d<7;d++){
+            const key=toDateKey(cursor);
+            week.push({key,done:cursor<=todayDate&&!!selectedHabit.logs[key],isFuture:cursor>todayDate,month:cursor.getMonth(),day:cursor.getDate()});
+            cursor.setDate(cursor.getDate()+1);
+          }
+          weeks.push(week);
+          if(cursor>todayDate&&cursor.getDay()===0) break;
+        }
+        const monthLabels=[]; let prevM=-1;
+        weeks.forEach((wk,wi)=>{
+          for(const c of wk){ if(c.day===1&&c.month!==prevM){prevM=c.month;monthLabels.push({weekIdx:wi,label:MONTH_NAMES[c.month].slice(0,3)});break;} }
+        });
+        return{weeks,monthLabels};
+      },[selectedHabit]);
+
+      // ── Add / delete habit ──────────────────────────────────────────
+      function addHabit() {
+        if(!newName.trim()) return;
+        const nH={id:nextId,name:newName.trim(),emoji:newEmoji,colorIdx:newColorIdx,logs:{},createdAt:toDateKey(todayDate),totalDays:0,totalSessions:0,dailyTarget:0,lastSessionDate:'',todaySessions:0};
+        const nNId=nextId+1;
+        setHabitsRaw(prev=>{
+          const next=[...prev,nH]; habitsRef.current=next; nextIdRef.current=nNId;
+          if(canSave()){ writeAppJson(dirHandleRef.current,nNId,next.map(h=>h.id)).catch(console.error); writeHabitMeta(dirHandleRef.current,nH).catch(console.error); ensureSessionsDir(dirHandleRef.current,nH.id).catch(console.error); }
+          return next;
+        });
+        setNextIdRaw(nNId); setSelectedId(nH.id); setNewName(""); setNewEmoji("📚"); setNewColorIdx(3); setShowModal(false);
+      }
+
+      function deleteHabit(id) {
+        if(habits.length<=1) return;
+        setHabitsRaw(prev=>{
+          const next=prev.filter(h=>h.id!==id); habitsRef.current=next;
+          if(canSave()){ writeAppJson(dirHandleRef.current,nextIdRef.current,next.map(h=>h.id)).catch(console.error); dirHandleRef.current.removeEntry(`habit-${id}`,{recursive:true}).catch(console.error); }
+          return next;
+        });
+        if(selectedId===id) setSelectedId(habits.find(h=>h.id!==id)?.id);
+      }
+
+      // ── Backup badge ────────────────────────────────────────────────
+      function BackupBadge() {
+        if(backupStatus==='initializing') return <div style={{fontSize:"11px",color:"#9ca3af",textAlign:"center",padding:"6px 0"}}>Loading...</div>;
+        if(backupStatus==='no-api') return <div style={{fontSize:"11px",color:"#b45309",background:"#fef3c7",borderRadius:"8px",padding:"7px 10px",textAlign:"center",lineHeight:"1.4"}}>Auto-backup requires Chrome or Edge</div>;
+        if(backupStatus==='needs-setup') return <button onClick={setupBackup} style={{width:"100%",padding:"8px 10px",borderRadius:"10px",border:"1px dashed #d1d5db",background:"#f9fafb",cursor:"pointer",fontSize:"12px",color:"#6b7280",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}><span>📁</span> Choose backup folder</button>;
+        if(backupStatus==='needs-permission') return <button onClick={setupBackup} style={{width:"100%",padding:"8px 10px",borderRadius:"10px",border:"1px solid #fcd34d",background:"#fef3c7",cursor:"pointer",fontSize:"12px",color:"#92400e",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}><span>🔓</span> Re-authorize "{backupDirName}"</button>;
+        if(backupStatus==='active') return <div style={{fontSize:"11px",color:"#065f46",background:"#d1fae5",borderRadius:"8px",padding:"6px 10px",display:"flex",alignItems:"center",justifyContent:"center",gap:"5px"}}><span style={{color:"#10b981",fontSize:"9px"}}>●</span><span>Auto-backup: <strong>{backupDirName}/</strong></span></div>;
+        return null;
+      }
+
+      // ── Timer banners ───────────────────────────────────────────────
+      function TimerBanner() {
+        if(timerPhase==='idle') return null;
+        const tHabit=habits.find(h=>h.id===timerHabitId);
+        const tc=tHabit?COLORS[tHabit.colorIdx]:COLORS[0];
+        const count=sessionCountRef.current[timerHabitId]||0;
+        const nextBreakMins=count%4===0&&count>0?15:5;
+
+        if(timerPhase==='running') return (
+          <div className={`${tc.light} border ${tc.border} rounded-2xl`}
+            style={{display:"flex",alignItems:"center",gap:"16px",padding:"14px 20px",marginBottom:"24px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+            <span style={{fontSize:"24px"}}>🍅</span>
+            <div style={{flex:1}}>
+              <p className={`text-sm font-semibold ${tc.text}`}>Working on: {tHabit?.emoji} {tHabit?.name} {timerTagRef.current&&<span style={{marginLeft:"8px",padding:"2px 8px",borderRadius:"99px",background:"rgba(0,0,0,0.08)",fontSize:"11px"}}>#{timerTagRef.current}</span>}</p>
+              <p className="text-xs text-gray-400" style={{marginTop:"2px"}}>{timerDurationRef.current}-min session · stay focused</p>
+            </div>
+            <span className={`text-3xl font-bold tabular-nums ${tc.text}`} style={{fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>{formatTime(timerSecondsLeft)}</span>
+            <button onClick={cancelAll} className="text-gray-400 hover:text-red-400 transition-all" style={{background:"none",border:"none",cursor:"pointer",fontSize:"18px",padding:"4px 8px"}} title="Cancel">✕</button>
+          </div>
+        );
+
+        if(timerPhase==='done') return (
+          <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"16px",padding:"16px 20px",marginBottom:"24px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
+              <span style={{fontSize:"22px"}}>✅</span>
+              <div style={{flex:1}}>
+                <p className="text-sm font-semibold text-green-800">Session complete! +1 for {tHabit?.emoji} {tHabit?.name}</p>
+                <p className="text-xs text-green-600" style={{marginTop:"2px"}}>
+                  {count%4===0&&count>0 ? `🎉 4 sessions done — take a ${nextBreakMins}-min long break!` : `Take a ${nextBreakMins}-min break when ready.`}
+                </p>
+              </div>
+            </div>
+            <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)}
+              placeholder="Add a session note (optional)..."
+              style={{width:"100%",padding:"8px 12px",borderRadius:"10px",border:"1px solid #bbf7d0",fontSize:"13px",resize:"vertical",minHeight:"60px",background:"white",outline:"none"}} />
+            <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+              <button onClick={async()=>{await saveCurrentNote(sessionNote);startBreak();}}
+                style={{padding:"7px 14px",borderRadius:"10px",border:"none",background:"#16a34a",color:"white",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+                ☕ Take {nextBreakMins}-min Break
+              </button>
+              <button onClick={async()=>{await saveCurrentNote(sessionNote);setTimerHabitId(null);setTimerPhase('selecting');}}
+                style={{padding:"7px 14px",borderRadius:"10px",border:"none",background:"#111827",color:"white",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+                ▶ Next Session
+              </button>
+              <button onClick={async()=>{await saveCurrentNote(sessionNote);cancelAll();}}
+                style={{padding:"7px 14px",borderRadius:"10px",border:"1px solid #d1fae5",background:"white",color:"#374151",fontSize:"12px",fontWeight:500,cursor:"pointer",marginLeft:"auto"}}>
+                ✕ Done
+              </button>
+            </div>
+          </div>
+        );
+
+        if(timerPhase==='break') return (
+          <div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:"16px",display:"flex",alignItems:"center",gap:"16px",padding:"14px 20px",marginBottom:"24px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+            <span style={{fontSize:"24px"}}>☕</span>
+            <div style={{flex:1}}>
+              <p className="text-sm font-semibold text-blue-800">{breakDuration}-min break · {tHabit?.emoji} {tHabit?.name}</p>
+              <p className="text-xs text-blue-500" style={{marginTop:"2px"}}>Relax — timer will alert you when it's time</p>
+            </div>
+            <span className="text-3xl font-bold tabular-nums text-blue-700" style={{fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px"}}>{formatTime(timerSecondsLeft)}</span>
+            <button onClick={()=>{clearInterval(timerIntervalRef.current);setTimerPhase('break-done');}}
+              style={{padding:"7px 12px",borderRadius:"10px",border:"1px solid #bfdbfe",background:"white",color:"#1d4ed8",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+              ⏭ Skip
+            </button>
+            <button onClick={cancelAll} className="text-gray-400 hover:text-red-400 transition-all" style={{background:"none",border:"none",cursor:"pointer",fontSize:"18px",padding:"4px 8px"}}>✕</button>
+          </div>
+        );
+
+        if(timerPhase==='break-done') return (
+          <div style={{background:"#faf5ff",border:"1px solid #c4b5fd",borderRadius:"16px",display:"flex",alignItems:"center",gap:"16px",padding:"14px 20px",marginBottom:"24px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+            <span style={{fontSize:"24px"}}>🎯</span>
+            <div style={{flex:1}}>
+              <p className="text-sm font-semibold text-purple-800">Break over! Ready to focus?</p>
+              <p className="text-xs text-purple-500" style={{marginTop:"2px"}}>Start your next session whenever you're ready</p>
+            </div>
+            <button onClick={()=>{setTimerHabitId(null);setTimerPhase('selecting');}}
+              style={{padding:"7px 14px",borderRadius:"10px",border:"none",background:"#7c3aed",color:"white",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
+              ▶ Start Session
+            </button>
+            <button onClick={cancelAll} className="text-gray-400 hover:text-gray-600 transition-all" style={{background:"none",border:"none",cursor:"pointer",fontSize:"18px",padding:"4px 8px"}}>✕</button>
+          </div>
+        );
+
+        return null;
+      }
+
+      // ── Render ──────────────────────────────────────────────────────
+      return (
+        <div style={{display:"flex",minHeight:"100vh"}}>
+
+          {/* Sidebar */}
+          <div className="sidebar bg-white border-r border-gray-200" style={{display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0}}>
+            <div className="p-5 border-b border-gray-100" onClick={()=>setView('home')} style={{cursor:"pointer"}} title="Go to overview">
+              <h1 className="text-xl font-bold text-gray-900">🗓️ Habit Tracker</h1>
+              <p className="text-xs text-gray-400 mt-1">Build better habits</p>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>
+              {habits.map(h=>{
+                const c=COLORS[h.colorIdx]; const isSel=view==='calendar'&&h.id===selectedId;
+                return(
+                  <div key={h.id} onClick={()=>{setSelectedId(h.id);setView('calendar');setDetailTab('calendar');}}
+                    className={`border rounded-xl cursor-pointer transition-all ${isSel?`${c.light} ${c.border}`:"border-transparent hover:bg-gray-50"}`}
+                    style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",position:"relative"}}
+                    onMouseEnter={e=>e.currentTarget.querySelector(".del-btn").style.opacity="1"}
+                    onMouseLeave={e=>e.currentTarget.querySelector(".del-btn").style.opacity="0"}>
+                    <span style={{fontSize:"20px"}}>{h.emoji}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p className={`text-sm font-medium ${isSel?c.text:"text-gray-700"}`} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</p>
+                      <p className="text-xs text-gray-400">{h.totalDays||0} days</p>
+                    </div>
+                    <button className="del-btn text-gray-300 hover:text-red-400 transition-all text-xs"
+                      style={{opacity:0,transition:"opacity 0.15s",background:"none",border:"none",cursor:"pointer",padding:"2px 4px"}}
+                      onClick={e=>{e.stopPropagation();deleteHabit(h.id);}}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{padding:"12px",borderTop:"1px solid #f3f4f6",display:"flex",flexDirection:"column",gap:"8px"}}>
+              <button onClick={()=>setShowModal(true)} className="bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors rounded-xl"
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",padding:"10px",border:"none",cursor:"pointer"}}>
+                <span style={{fontSize:"18px"}}>+</span> Add Habit
+              </button>
+              <BackupBadge />
+            </div>
+          </div>
+
+          {/* Main */}
+          <div style={{flex:1,padding:"32px",overflowY:"auto"}}>
+            <TimerBanner />
+
+            {/* ── Home view ── */}
+            {view==='home'&&(
+              <div style={{maxWidth:"760px"}}>
+                {/* Header */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"24px"}}>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">All Habits</h2>
+                    <p className="text-sm text-gray-400" style={{marginTop:"4px"}}>{MONTH_NAMES[todayDate.getMonth()]} {todayDate.getFullYear()} · click to open calendar</p>
+                  </div>
+                  <button onClick={()=>setTimerPhase('selecting')} disabled={timerPhase==='running'||timerPhase==='break'}
+                    style={{display:"flex",alignItems:"center",gap:"8px",padding:"9px 16px",borderRadius:"12px",border:"none",
+                      cursor:(timerPhase==='running'||timerPhase==='break')?"not-allowed":"pointer",
+                      background:(timerPhase==='running'||timerPhase==='break')?"#f3f4f6":"#111827",
+                      color:(timerPhase==='running'||timerPhase==='break')?"#9ca3af":"white",
+                      fontSize:"13px",fontWeight:600,transition:"all 0.15s"}}>
+                    <span style={{fontSize:"16px"}}>🍅</span>
+                    {timerPhase==='running'?formatTime(timerSecondsLeft):timerPhase==='break'?`Break ${formatTime(timerSecondsLeft)}`:"Start Pomodoro"}
+                  </button>
+                </div>
+
+                {/* Weekly Digest */}
+                <div className="bg-white border border-gray-100 rounded-2xl" style={{padding:"16px 20px",marginBottom:"20px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                  <p className="text-xs font-semibold text-gray-400" style={{textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"12px"}}>This Week</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                    {weeklyDigest.map(wd=>{
+                      const c=COLORS[wd.colorIdx];
+                      return(
+                        <div key={wd.id} style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                          <span style={{fontSize:"16px"}}>{wd.emoji}</span>
+                          <span style={{fontSize:"12px",color:"#6b7280",width:"90px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{wd.name}</span>
+                          <div style={{display:"flex",gap:"3px"}}>
+                            {wd.days.map((d,i)=>(
+                              <div key={i} title={`${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}: ${d.isFuture?'upcoming':d.done?'done':'missed'}`}
+                                style={{width:"22px",height:"22px",borderRadius:"6px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px",fontWeight:600,
+                                  background:d.isFuture?"#f9fafb":d.done?wd.hex:"#f3f4f6",
+                                  color:d.isFuture?"#d1d5db":d.done?"white":"#9ca3af"}}>
+                                {d.label}
+                              </div>
+                            ))}
+                          </div>
+                          {wd.todaySessions>0&&(
+                            <span style={{fontSize:"11px",color:"#6b7280",marginLeft:"4px"}}>🍅 ×{wd.todaySessions}{wd.dailyTarget>0?`/${wd.dailyTarget}`:''}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Habit cards */}
+                <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+                  {habits.map(h=>{
+                    const c=COLORS[h.colorIdx]; const s=allStats.find(s=>s.id===h.id)||{};
+                    const pct=s.rate||0; const doneToday=!!h.logs[toDateKey(todayDate)];
+                    const todayKey=toDateKey(todayDate);
+                    const todaySess=h.lastSessionDate===todayKey?(h.todaySessions||0):0;
+                    const target=h.dailyTarget||0;
+                    return(
+                      <div key={h.id} onClick={()=>{setSelectedId(h.id);setView('calendar');setDetailTab('calendar');}}
+                        className="bg-white border border-gray-100 rounded-2xl transition-all"
+                        style={{display:"flex",alignItems:"center",gap:"20px",padding:"16px 22px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",cursor:"pointer"}}
+                        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.10)";e.currentTarget.style.transform="translateY(-1px)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.06)";e.currentTarget.style.transform="none";}}>
+                        <div className={`rounded-xl ${c.bg}`} style={{width:"46px",height:"46px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{fontSize:"22px"}}>{h.emoji}</span>
+                        </div>
+                        <div style={{flex:"0 0 150px",minWidth:0}}>
+                          <p className="text-sm font-semibold text-gray-900" style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</p>
+                          <p className="text-xs text-gray-400" style={{marginTop:"2px"}}>since {h.createdAt}</p>
+                          {target>0&&(
+                            <div style={{display:"flex",gap:"3px",marginTop:"5px",alignItems:"center"}}>
+                              {Array.from({length:target},(_,i)=>(
+                                <div key={i} style={{width:"8px",height:"8px",borderRadius:"50%",background:i<todaySess?c.hex:"#e5e7eb"}} />
+                              ))}
+                              <span style={{fontSize:"10px",color:"#9ca3af",marginLeft:"4px"}}>{todaySess}/{target} today</span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{flex:"0 0 80px",textAlign:"center"}}>
+                          <p className={`text-xl font-bold ${c.text}`}>{h.totalDays||0}</p>
+                          <p className="text-xs text-gray-400">total days</p>
+                        </div>
+                        <div style={{flex:"0 0 80px",textAlign:"center"}}>
+                          <p className="text-xl font-bold text-gray-800">{s.streak>0?`${s.streak} 🔥`:"—"}</p>
+                          <p className="text-xs text-gray-400">streak</p>
+                        </div>
+                        <div style={{flex:1,minWidth:"80px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
+                            <span className="text-xs text-gray-500">{MONTH_NAMES[todayDate.getMonth()].slice(0,3)}: {s.monthDone}/{s.monthTotal}</span>
+                            <span className={`text-xs font-semibold ${c.text}`}>{pct}%</span>
+                          </div>
+                          <div style={{height:"6px",borderRadius:"99px",background:"#f3f4f6",overflow:"hidden"}}>
+                            <div className={c.bg} style={{height:"100%",width:`${pct}%`,borderRadius:"99px",transition:"width 0.4s ease"}} />
+                          </div>
+                        </div>
+                        <button onClick={e=>{e.stopPropagation();toggleToday(h.id);}} title={doneToday?"Unmark today":"Mark today done"}
+                          style={{flexShrink:0,width:"36px",height:"36px",borderRadius:"50%",border:"2px solid",
+                            borderColor:doneToday?"transparent":"#d1d5db",
+                            background:doneToday?c.hex:"white",
+                            cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s ease",fontSize:"16px"}}>
+                          <span style={{color:doneToday?"white":"#d1d5db",fontWeight:"bold",fontSize:"14px"}}>✓</span>
+                        </button>
+                        <span className="text-gray-300" style={{fontSize:"18px",marginLeft:"4px"}}>›</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Detail / Calendar view ── */}
+            {view==='calendar'&&selectedHabit&&(()=>{
+              const todayKey=toDateKey(todayDate);
+              return(<>
+                {/* Header */}
+                <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"28px"}}>
+                  <button onClick={()=>setView('home')} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    style={{padding:"6px 10px",border:"none",background:"none",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",gap:"4px"}}>
+                    ← All Habits
+                  </button>
+                  <span style={{fontSize:"40px"}}>{selectedHabit.emoji}</span>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedHabit.name}</h2>
+                    <p className="text-sm text-gray-400">Tracking since {selectedHabit.createdAt}</p>
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px",marginBottom:"16px"}}>
+                  {[
+                    {label:"Current Streak",    value:`${stats.streak} 🔥`,                  sub:"days in a row"},
+                    {label:"Total Days",         value:stats.total,                            sub:"days logged ever"},
+                    {label:"This Month",         value:`${stats.monthDone}/${stats.monthTotal}`,sub:"days completed"},
+                    {label:"Completion Rate",    value:`${stats.rate}%`,                       sub:"this month"},
+                    {label:"Total Sessions",     value:`${stats.totalSessions} 🍅`,            sub:"pomodoros completed"},
+                    {label:"Avg Sessions / Day", value:stats.avgSessionsPerDay,                sub:"sessions per active day"},
+                  ].map(s=>(
+                    <div key={s.label} className={`${color.light} border ${color.border} rounded-2xl`} style={{padding:"16px"}}>
+                      <p className="text-xs text-gray-500 font-medium" style={{textTransform:"uppercase",letterSpacing:"0.05em"}}>{s.label}</p>
+                      <p className={`text-2xl font-bold mt-1 ${color.text}`}>{s.value}</p>
+                      <p className="text-xs text-gray-400" style={{marginTop:"2px"}}>{s.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Daily target control */}
+                <div className={`${color.light} border ${color.border} rounded-2xl`} style={{padding:"14px 20px",marginBottom:"24px",display:"flex",alignItems:"center",gap:"16px"}}>
+                  <div style={{flex:1}}>
+                    <p className="text-xs text-gray-500 font-medium" style={{textTransform:"uppercase",letterSpacing:"0.05em"}}>Daily Session Target</p>
+                    <div style={{display:"flex",alignItems:"center",gap:"12px",marginTop:"6px"}}>
+                      <button onClick={()=>updateDailyTarget(selectedId,-1)} disabled={stats.dailyTarget===0}
+                        style={{width:"28px",height:"28px",borderRadius:"50%",border:"1px solid",borderColor:color.hex,background:"white",cursor:stats.dailyTarget===0?"not-allowed":"pointer",fontSize:"18px",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",opacity:stats.dailyTarget===0?0.3:1}}>−</button>
+                      <span className={`text-lg font-bold ${color.text}`}>
+                        {stats.dailyTarget===0?"No target":`${stats.dailyTarget} session${stats.dailyTarget===1?"":"s"} / day`}
+                      </span>
+                      <button onClick={()=>updateDailyTarget(selectedId,1)}
+                        style={{width:"28px",height:"28px",borderRadius:"50%",border:"1px solid",borderColor:color.hex,background:"white",cursor:"pointer",fontSize:"18px",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                      {stats.dailyTarget>0&&(
+                        <span style={{marginLeft:"8px",fontSize:"13px",color:"#6b7280"}}>
+                          Today: {stats.todaySessions}/{stats.dailyTarget}
+                          {" "}
+                          {Array.from({length:stats.dailyTarget},(_,i)=>(
+                            <span key={i} style={{display:"inline-block",width:"8px",height:"8px",borderRadius:"50%",background:i<stats.todaySessions?color.hex:"#e5e7eb",marginRight:"2px"}} />
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tab bar */}
+                <div style={{display:"flex",gap:"0",marginBottom:"20px",borderBottom:"2px solid #f3f4f6"}}>
+                  {[['calendar','📅 Calendar'],['sessions','📋 Sessions'],['year','🗓 Year View']].map(([tab,label])=>(
+                    <button key={tab} onClick={()=>setDetailTab(tab)}
+                      style={{padding:"9px 18px",border:"none",background:"none",cursor:"pointer",fontSize:"13px",fontWeight:500,
+                        color:detailTab===tab?color.hex:"#6b7280",
+                        borderBottom:`2px solid ${detailTab===tab?color.hex:"transparent"}`,
+                        marginBottom:"-2px",transition:"all 0.15s"}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Calendar tab ── */}
+                {detailTab==='calendar'&&(
+                  <div className="bg-white rounded-2xl border border-gray-100" style={{padding:"24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"24px"}}>
+                      <button onClick={prevMonth} className="text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                        style={{padding:"8px 14px",border:"none",background:"none",cursor:"pointer",fontSize:"20px",lineHeight:1}}>‹</button>
+                      <h3 className="text-lg font-semibold text-gray-900">{MONTH_NAMES[viewMonth]} {viewYear}</h3>
+                      <button onClick={nextMonth} disabled={isNextDisabled}
+                        className={`rounded-lg transition-colors ${isNextDisabled?"text-gray-200":"text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
+                        style={{padding:"8px 14px",border:"none",background:"none",cursor:isNextDisabled?"not-allowed":"pointer",fontSize:"20px",lineHeight:1}}>›</button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:"8px"}}>
+                      {DAY_NAMES.map(d=><div key={d} className="text-center text-xs font-semibold text-gray-400" style={{padding:"4px 0"}}>{d}</div>)}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"4px"}}>
+                      {calendarDays.map((day,idx)=>{
+                        if(!day) return <div key={`e${idx}`}/>;
+                        const done=isDone(day); const future=isFuture(day); const todayDay=isToday(day);
+                        let bgColor="#f9fafb",textColor="#4b5563",cursor="pointer",boxShadow="none";
+                        if(future){bgColor="#f9fafb";textColor="#d1d5db";cursor="not-allowed";}
+                        else if(done){bgColor="";textColor="white";}
+                        else if(todayDay){bgColor="#f3f4f6";textColor="#111827";boxShadow="0 0 0 2px white, 0 0 0 4px #111827";}
+                        return(
+                          <button key={day} onClick={()=>!future&&toggleDay(day)}
+                            className={done?color.bg:""}
+                            style={{aspectRatio:"1/1",minHeight:"44px",borderRadius:"12px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                              fontSize:"14px",fontWeight:500,border:"none",cursor,background:done?"":bgColor,color:done?"white":textColor,boxShadow,transition:"all 0.15s ease"}}
+                            onMouseEnter={e=>{if(!future&&!done)e.currentTarget.style.background="#e5e7eb";}}
+                            onMouseLeave={e=>{if(!future&&!done)e.currentTarget.style.background=todayDay?"#f3f4f6":bgColor;}}
+                            title={future?"Future date":done?"Click to unmark":"Click to mark done"}>
+                            <span>{day}</span>
+                            {done&&<span style={{fontSize:"11px",opacity:0.85}}>✓</span>}
+                            {todayDay&&!done&&<span style={{width:"4px",height:"4px",borderRadius:"50%",background:"#111827",marginTop:"2px"}}/>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:"24px",marginTop:"24px",paddingTop:"16px",borderTop:"1px solid #f3f4f6",fontSize:"12px",color:"#9ca3af"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div className={`rounded-md ${color.bg}`} style={{width:"16px",height:"16px"}}/><span>Completed</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"16px",height:"16px",borderRadius:"6px",background:"#f3f4f6"}}/><span>Not done</span></div>
+                      <span style={{marginLeft:"auto",fontStyle:"italic"}}>Click any past day to toggle ✓</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Sessions tab ── */}
+                {detailTab==='sessions'&&(
+                  <div>
+                    {sessionsLoading&&<p className="text-sm text-gray-400 text-center" style={{padding:"40px"}}>Loading sessions...</p>}
+                    {!sessionsLoading&&loadedSessions.length===0&&(
+                      <div className="bg-white border border-gray-100 rounded-2xl" style={{padding:"40px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                        <p style={{fontSize:"32px",marginBottom:"12px"}}>🍅</p>
+                        <p className="text-sm font-medium text-gray-600">No sessions recorded yet</p>
+                        <p className="text-xs text-gray-400" style={{marginTop:"6px"}}>Start a pomodoro session to track your work</p>
+                      </div>
+                    )}
+                    {!sessionsLoading&&loadedSessions.length>0&&(()=>{
+                      const byDate=loadedSessions.reduce((acc,s)=>{
+                        const d=(s.endedAt||'').slice(0,10); if(!acc[d]) acc[d]=[]; acc[d].push(s); return acc;
+                      },{});
+                      const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+                      return(
+                        <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+                          {dates.map(date=>{
+                            const d=new Date(date+'T12:00:00');
+                            const label=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+                            return(
+                              <div key={date} className="bg-white border border-gray-100 rounded-2xl" style={{padding:"16px 20px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                                <p className="text-xs font-semibold text-gray-400" style={{textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"12px"}}>{label}</p>
+                                <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+                                  {byDate[date].map((s,i)=>{
+                                    const t=s.endedAt?new Date(s.endedAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'';
+                                    return(
+                                      <div key={i} style={{display:"flex",alignItems:"flex-start",gap:"12px",padding:"10px 12px",borderRadius:"10px",background:"#f9fafb"}}>
+                                        <span style={{fontSize:"18px",marginTop:"1px"}}>🍅</span>
+                                        <div style={{flex:1}}>
+                                          <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+                                            <span className="text-sm font-medium text-gray-700">{t}</span>
+                                            <span style={{padding:"2px 8px",borderRadius:"99px",background:color.hex+"22",color:color.hex,fontSize:"11px",fontWeight:600}}>{s.durationMins} min</span>
+                                            {s.tag&&<span style={{padding:"2px 8px",borderRadius:"99px",background:"#f3f4f6",color:"#6b7280",fontSize:"11px"}}>#{s.tag}</span>}
+                                          </div>
+                                          {s.note&&<p className="text-xs text-gray-500" style={{marginTop:"5px",lineHeight:"1.5"}}>{s.note}</p>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* ── Year heatmap tab ── */}
+                {detailTab==='year'&&(
+                  <div className="bg-white border border-gray-100 rounded-2xl" style={{padding:"24px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",overflowX:"auto"}}>
+                    <p className="text-sm font-semibold text-gray-700" style={{marginBottom:"16px"}}>Past 52 Weeks</p>
+                    {/* Month labels */}
+                    <div style={{display:"flex",gap:"3px",marginBottom:"4px",paddingLeft:"24px"}}>
+                      {heatmapData.weeks.map((wk,wi)=>{
+                        const ml=heatmapData.monthLabels.find(m=>m.weekIdx===wi);
+                        return<div key={wi} style={{width:"13px",flexShrink:0,fontSize:"9px",color:"#9ca3af",whiteSpace:"nowrap",overflow:"visible"}}>{ml?ml.label:''}</div>;
+                      })}
+                    </div>
+                    <div style={{display:"flex",gap:"3px"}}>
+                      {/* Day labels */}
+                      <div style={{display:"flex",flexDirection:"column",gap:"3px",marginRight:"4px",paddingTop:"1px"}}>
+                        {['S','M','T','W','T','F','S'].map((d,i)=>(
+                          <div key={i} style={{width:"16px",height:"13px",fontSize:"9px",color:"#9ca3af",display:"flex",alignItems:"center",justifyContent:"flex-end"}}>{i%2===1?d:''}</div>
+                        ))}
+                      </div>
+                      {/* Grid */}
+                      <div style={{display:"flex",gap:"3px"}}>
+                        {heatmapData.weeks.map((wk,wi)=>(
+                          <div key={wi} style={{display:"flex",flexDirection:"column",gap:"3px"}}>
+                            {wk.map((cell,di)=>(
+                              <div key={di} title={`${cell.key}: ${cell.isFuture?'future':cell.done?'done':'not done'}`}
+                                style={{width:"13px",height:"13px",borderRadius:"3px",
+                                  background:cell.isFuture?"#f9fafb":cell.done?color.hex:"#ebedf0"}} />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Legend */}
+                    <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"14px",justifyContent:"flex-end",fontSize:"11px",color:"#9ca3af"}}>
+                      <span>Less</span>
+                      {["#ebedf0","#c6e0ff",color.hex+"99",color.hex].map((bg,i)=>(
+                        <div key={i} style={{width:"13px",height:"13px",borderRadius:"3px",background:bg}} />
+                      ))}
+                      <span>More</span>
+                    </div>
+                    <p className="text-xs text-gray-400 text-center" style={{marginTop:"12px"}}>
+                      {Object.values(selectedHabit.logs).filter(Boolean).length} total completed days
+                    </p>
+                  </div>
+                )}
+              </>);
+            })()}
+          </div>
+
+          {/* Add Habit Modal */}
+          {showModal&&(
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:"16px"}}>
+              <div className="bg-white rounded-2xl" style={{width:"100%",maxWidth:"440px",padding:"24px",boxShadow:"0 25px 50px rgba(0,0,0,0.25)"}}>
+                <h3 className="text-lg font-bold text-gray-900" style={{marginBottom:"20px"}}>Add New Habit</h3>
+                <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" style={{marginBottom:"6px"}}>Habit Name</label>
+                    <input type="text" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()}
+                      placeholder="e.g. Meditate, Journal, Walk..." className="border border-gray-200 rounded-xl text-sm"
+                      style={{width:"100%",padding:"10px 16px",outline:"none"}} autoFocus />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" style={{marginBottom:"8px"}}>Pick an Emoji</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"8px"}}>
+                      {EMOJIS.map(e=>(
+                        <button key={e} onClick={()=>setNewEmoji(e)}
+                          style={{fontSize:"20px",padding:"8px",borderRadius:"8px",border:"none",cursor:"pointer",background:newEmoji===e?"#111827":"#f3f4f6",transform:newEmoji===e?"scale(1.1)":"scale(1)",transition:"all 0.15s"}}>
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" style={{marginBottom:"8px"}}>Pick a Color</label>
+                    <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                      {COLORS.map((c,i)=>(
+                        <button key={i} onClick={()=>setNewColorIdx(i)} className={c.bg}
+                          style={{width:"32px",height:"32px",borderRadius:"50%",border:"none",cursor:"pointer",
+                            boxShadow:newColorIdx===i?"0 0 0 2px white, 0 0 0 4px #111827":"none",
+                            transform:newColorIdx===i?"scale(1.1)":"scale(1)",transition:"all 0.15s"}} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:"12px",marginTop:"24px"}}>
+                  <button onClick={()=>setShowModal(false)} className="border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 rounded-xl transition-colors"
+                    style={{flex:1,padding:"10px",cursor:"pointer",background:"white"}}>Cancel</button>
+                  <button onClick={addHabit} disabled={!newName.trim()} className="bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 rounded-xl transition-colors"
+                    style={{flex:1,padding:"10px",cursor:newName.trim()?"pointer":"not-allowed",border:"none",opacity:newName.trim()?1:0.4}}>
+                    Add Habit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pomodoro selecting modal */}
+          {timerPhase==='selecting'&&(
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:"16px"}}>
+              <div className="bg-white rounded-2xl" style={{width:"100%",maxWidth:"420px",padding:"24px",boxShadow:"0 25px 50px rgba(0,0,0,0.25)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"4px"}}>
+                  <span style={{fontSize:"22px"}}>🍅</span>
+                  <h3 className="text-lg font-bold text-gray-900">Start Pomodoro</h3>
+                </div>
+                <p className="text-sm text-gray-400" style={{marginBottom:"16px"}}>Choose a habit and session length</p>
+
+                {/* Duration picker */}
+                <div style={{marginBottom:"14px"}}>
+                  <p className="text-xs font-semibold text-gray-500" style={{marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Duration</p>
+                  <div style={{display:"flex",gap:"8px"}}>
+                    {[15,25,50].map(d=>(
+                      <button key={d} onClick={()=>setTimerDuration(d)}
+                        style={{flex:1,padding:"8px",borderRadius:"10px",border:"1px solid",
+                          borderColor:timerDuration===d?"#111827":"#e5e7eb",
+                          background:timerDuration===d?"#111827":"white",
+                          color:timerDuration===d?"white":"#374151",
+                          fontSize:"13px",fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+                        {d} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tag input */}
+                <div style={{marginBottom:"16px"}}>
+                  <p className="text-xs font-semibold text-gray-500" style={{marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Tag (optional)</p>
+                  <input type="text" value={timerTag} onChange={e=>setTimerTag(e.target.value)}
+                    placeholder="e.g. deep-work, review, lecture..."
+                    className="border border-gray-200 rounded-xl text-sm"
+                    style={{width:"100%",padding:"9px 14px",outline:"none"}} />
+                </div>
+
+                {/* Habit list */}
+                <p className="text-xs font-semibold text-gray-500" style={{marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Habit</p>
+                <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"18px"}}>
+                  {habits.map(h=>{
+                    const c=COLORS[h.colorIdx]; const sel=timerHabitId===h.id;
+                    return(
+                      <div key={h.id} onClick={()=>setTimerHabitId(h.id)}
+                        className={`border rounded-xl cursor-pointer transition-all ${sel?`${c.light} ${c.border}`:"border-gray-100 hover:bg-gray-50"}`}
+                        style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px"}}>
+                        <span style={{fontSize:"20px"}}>{h.emoji}</span>
+                        <span className={`text-sm font-medium ${sel?c.text:"text-gray-700"}`}>{h.name}</span>
+                        {sel&&<span className={`ml-auto text-xs font-semibold ${c.text}`}>✓ selected</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",gap:"12px"}}>
+                  <button onClick={()=>{setTimerPhase('idle');setTimerHabitId(null);}}
+                    className="border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 rounded-xl transition-colors"
+                    style={{flex:1,padding:"10px",cursor:"pointer",background:"white"}}>Cancel</button>
+                  <button onClick={()=>timerHabitId&&startPomodoro(timerHabitId)} disabled={!timerHabitId}
+                    className="bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 rounded-xl transition-colors"
+                    style={{flex:1,padding:"10px",border:"none",cursor:timerHabitId?"pointer":"not-allowed",opacity:timerHabitId?1:0.4}}>
+                    🍅 Start {timerDuration} min
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html>
