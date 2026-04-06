@@ -238,6 +238,7 @@
     const timerTagRef        = useRef('');
     const sessionStartTimeRef= useRef(null);
     const sessionCountRef    = useRef({});
+    const sessionNoteRef     = useRef('');
 
     // ── Auth init ──────────────────────────────────────────────────
     useEffect(() => {
@@ -502,10 +503,18 @@
       timerIntervalRef.current=setInterval(()=>{
         const left=Math.max(0,Math.round((timerEndTimeRef.current-Date.now())/1000));
         setTimerSecondsLeft(left);
-        if(left===0){ clearInterval(timerIntervalRef.current); fireNotif('Break over! 🎯','Ready for the next session?'); setTimerPhase('break-done'); }
+        if(left===0){
+          clearInterval(timerIntervalRef.current);
+          saveCurrentNote(sessionNoteRef.current);
+          fireNotif('Break over! 🎯','Ready for the next session?');
+          setTimerPhase('break-done');
+        }
       },500);
       return()=>clearInterval(timerIntervalRef.current);
     },[timerPhase]);
+
+    // Keep note ref in sync so interval callbacks always read fresh value
+    useEffect(()=>{ sessionNoteRef.current=sessionNote; },[sessionNote]);
 
     // Mobile resize listener
     useEffect(()=>{
@@ -751,47 +760,50 @@
 
       if(timerPhase==='done') return (
         <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:'16px',padding:'16px 20px',marginBottom:'24px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'10px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'12px'}}>
             <span style={{fontSize:'22px'}}>✅</span>
             <div style={{flex:1}}>
               <p className="text-sm font-semibold text-green-800">Session complete! +1 for {th?.emoji} {th?.name}</p>
               <p className="text-xs text-green-600" style={{marginTop:'2px'}}>
-                {count%4===0&&count>0?`🎉 4 sessions — take a ${nextBreak}-min long break!`:`Suggested: ${nextBreak}-min break`}
+                {count%4===0&&count>0?`🎉 4 sessions — take a ${nextBreak}-min long break!`:`Take a ${nextBreak}-min break and jot a note`}
               </p>
             </div>
           </div>
-          <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)}
-            placeholder="Session note (optional)…"
-            style={{width:'100%',padding:'8px 12px',borderRadius:'10px',border:'1px solid #bbf7d0',fontSize:'13px',
-              resize:'vertical',minHeight:'56px',background:'white',outline:'none'}} />
-          <div style={{display:'flex',gap:'8px',marginTop:'10px',flexWrap:'wrap'}}>
-            <button onClick={async()=>{await saveCurrentNote(sessionNote);startBreak();}}
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            <button onClick={()=>startBreak()}
               style={{padding:'7px 14px',borderRadius:'10px',border:'none',background:'#16a34a',color:'white',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>
               ☕ Take {nextBreak}-min Break
             </button>
-            <button onClick={async()=>{await saveCurrentNote(sessionNote);setTimerHabitId(null);setTimerPhase('selecting');}}
+            <button onClick={async()=>{await saveCurrentNote('');setTimerHabitId(null);setTimerPhase('selecting');}}
               style={{padding:'7px 14px',borderRadius:'10px',border:'none',background:'#111827',color:'white',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>
               ▶ Next Session
             </button>
-            <button onClick={async()=>{await saveCurrentNote(sessionNote);cancelAll();}}
+            <button onClick={async()=>{await saveCurrentNote('');cancelAll();}}
               style={{padding:'7px 14px',borderRadius:'10px',border:'1px solid #d1fae5',background:'white',color:'#374151',fontSize:'12px',cursor:'pointer',marginLeft:'auto'}}>
-              {sessionNote.trim() ? '✓ Save & Done' : 'Skip & Done'}
+              Skip &amp; Done
             </button>
           </div>
         </div>
       );
 
       if(timerPhase==='break') return (
-        <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:'16px',display:'flex',alignItems:'center',gap:isMobile?'10px':'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px'}}>
-          <span style={{fontSize:isMobile?'20px':'24px'}}>☕</span>
-          <div style={{flex:1}}>
-            <p className="text-sm font-semibold text-blue-800">{breakDuration}-min break</p>
-            {!isMobile && <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>Relax — notification when done</p>}
+        <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:isMobile?'10px':'16px'}}>
+            <span style={{fontSize:isMobile?'20px':'24px'}}>☕</span>
+            <div style={{flex:1}}>
+              <p className="text-sm font-semibold text-blue-800">{breakDuration}-min break</p>
+              <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>Add a session note while you rest</p>
+            </div>
+            <span className={`${isMobile?'text-xl':'text-3xl'} font-bold text-blue-700`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
+            <button onClick={()=>{clearInterval(timerIntervalRef.current);saveCurrentNote(sessionNoteRef.current);setTimerPhase('break-done');}}
+              style={{padding:'7px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>⏭ Skip</button>
+            <button onClick={async()=>{clearInterval(timerIntervalRef.current);await saveCurrentNote(sessionNoteRef.current);cancelAll();}}
+              style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
           </div>
-          <span className={`${isMobile?'text-xl':'text-3xl'} font-bold text-blue-700`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
-          <button onClick={()=>{clearInterval(timerIntervalRef.current);setTimerPhase('break-done');}}
-            style={{padding:'7px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>⏭ Skip</button>
-          <button onClick={cancelAll} style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
+          <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)}
+            placeholder="How was that session? (optional note)"
+            style={{width:'100%',marginTop:'10px',padding:'8px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',
+              fontSize:'13px',resize:'vertical',minHeight:'56px',background:'white',outline:'none'}} />
         </div>
       );
 
