@@ -474,7 +474,9 @@
 
     async function saveCurrentNote(note) {
       if(!pendingSession) return;
-      const record={...pendingSession,note:(note||'').trim()};
+      const trimmed=(note||'').trim();
+      const record={...pendingSession};
+      if(trimmed) record.note=trimmed; // omit field entirely if no note
       setPendingSession(null); setSessionNote('');
       if(canSave()) await fsWriteSession(userRef.current.uid, record).catch(console.error);
     }
@@ -773,7 +775,7 @@
             </button>
             <button onClick={async()=>{await saveCurrentNote(sessionNote);cancelAll();}}
               style={{padding:'7px 14px',borderRadius:'10px',border:'1px solid #d1fae5',background:'white',color:'#374151',fontSize:'12px',cursor:'pointer',marginLeft:'auto'}}>
-              ✕ Done
+              {sessionNote.trim() ? '✓ Save & Done' : 'Skip & Done'}
             </button>
           </div>
         </div>
