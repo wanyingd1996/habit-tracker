@@ -119,7 +119,7 @@
 
   // ── Firestore helpers ──────────────────────────────────────────────
   const habitRef    = (uid,id)  => db.doc(`users/${uid}/habits/${id}`);
-  const appRef      = (uid)     => db.doc(`users/${uid}/app`);
+  const appRef      = (uid)     => db.doc(`users/${uid}/meta/app`);
   const sessionRef  = (uid,id,mk) => db.doc(`users/${uid}/habits/${id}/sessions/${mk}`);
 
   async function fsWriteHabit(uid, habit) {
