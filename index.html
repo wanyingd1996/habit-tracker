@@ -207,6 +207,8 @@
     // ── Auth init ──────────────────────────────────────────────────
     useEffect(() => {
       if (!CONFIG_READY) { setAuthStatus('no-config'); return; }
+      // Persist session in localStorage so user stays signed in across visits
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
       // Handle redirect sign-in result (needed for mobile)
       auth.getRedirectResult().catch(console.error);
 
