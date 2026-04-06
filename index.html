@@ -99,6 +99,15 @@
 
   function toDateKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 
+  // ── Quarter helpers ────────────────────────────────────────────────
+  function getQuarterNum(date)   { return Math.floor(date.getMonth()/3)+1; }
+  function getQuarterKey(date)   { return `${date.getFullYear()}-Q${getQuarterNum(date)}`; }
+  function getQuarterStart(date) { return new Date(date.getFullYear(), Math.floor(date.getMonth()/3)*3, 1); }
+  function getQuarterLabel(date) {
+    const q=getQuarterNum(date), sm=Math.floor(date.getMonth()/3)*3;
+    return `Q${q} ${date.getFullYear()} (${MONTH_NAMES[sm].slice(0,3)}–${MONTH_NAMES[sm+2].slice(0,3)})`;
+  }
+
   function defaultHabits() {
     const start = toDateKey(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
     return [
@@ -147,6 +156,32 @@
     const batch = db.batch();
     snap.forEach(d => batch.delete(d.ref));
     batch.delete(habitRef(uid, habitId));
+    await batch.commit();
+  }
+
+  // ── Quarterly cleanup ──────────────────────────────────────────────
+  async function runQuarterlyCleanup(uid, habitsData) {
+    const currentQ  = getQuarterKey(todayDate);
+    const qStartKey = toDateKey(getQuarterStart(todayDate));
+    const batch     = db.batch();
+    // Strip logs older than current quarter from every habit
+    habitsData.forEach(h => {
+      const kept = {};
+      Object.keys(h.logs||{}).forEach(k => { if(k >= qStartKey) kept[k] = true; });
+      batch.update(habitRef(uid, h.id), { logs: kept });
+    });
+    // Also delete session docs from months before this quarter
+    // (fire-and-forget per habit, outside batch to avoid 500-op limit)
+    habitsData.forEach(async h => {
+      try {
+        const sesSnap = await db.collection(`users/${uid}/habits/${h.id}/sessions`).get();
+        const sessBatch = db.batch();
+        sesSnap.forEach(d => { if(d.id < qStartKey.slice(0,7)) sessBatch.delete(d.ref); });
+        await sessBatch.commit();
+      } catch(e) { console.error('session cleanup', e); }
+    });
+    // Record that we've cleaned up for this quarter
+    batch.set(appRef(uid), { lastCleanupQuarter: currentQ }, { merge: true });
     await batch.commit();
   }
 
@@ -239,6 +274,19 @@
           nextIdRef.current = appData.nextId || 4;
           setNextIdRaw(appData.nextId || 4);
           appHabitIdsRef.current = appData.habitIds || [];
+        }
+
+        // Quarterly cleanup: runs once per quarter on first load
+        const currentQ = getQuarterKey(todayDate);
+        if ((appData?.lastCleanupQuarter || '') !== currentQ) {
+          const habitsSnap = await db.collection(`users/${uid}/habits`).get();
+          const habitsData = [];
+          habitsSnap.forEach(d => habitsData.push(d.data()));
+          if (habitsData.length > 0) {
+            await runQuarterlyCleanup(uid, habitsData);
+          } else {
+            await appRef(uid).set({ lastCleanupQuarter: currentQ }, { merge: true });
+          }
         }
 
         // Clean up previous listener
@@ -567,21 +615,24 @@
 
     const heatmapData = useMemo(()=>{
       if(!selectedHabit) return{weeks:[],monthLabels:[]};
-      const startDate=new Date(todayDate);
-      startDate.setDate(todayDate.getDate()-52*7-todayDate.getDay());
+      const qStart   = getQuarterStart(todayDate);
+      // Align start to the Sunday on or before quarter start
+      const startDate = new Date(qStart);
+      startDate.setDate(qStart.getDate()-qStart.getDay());
       const weeks=[]; const cursor=new Date(startDate);
-      for(let w=0;w<54;w++){
+      while(true){
         const week=[];
         for(let d=0;d<7;d++){
           const key=toDateKey(cursor);
-          week.push({key,done:cursor<=todayDate&&!!selectedHabit.logs[key],isFuture:cursor>todayDate,month:cursor.getMonth(),day:cursor.getDate()});
+          const inQ=cursor>=qStart;
+          week.push({key,done:inQ&&cursor<=todayDate&&!!selectedHabit.logs[key],isFuture:cursor>todayDate,inQ,month:cursor.getMonth(),day:cursor.getDate()});
           cursor.setDate(cursor.getDate()+1);
         }
         weeks.push(week);
-        if(cursor>todayDate&&cursor.getDay()===0) break;
+        if(cursor>todayDate) break;
       }
       const monthLabels=[]; let prevM=-1;
-      weeks.forEach((wk,wi)=>{ for(const c of wk){ if(c.day===1&&c.month!==prevM){prevM=c.month;monthLabels.push({weekIdx:wi,label:MONTH_NAMES[c.month].slice(0,3)});break;} } });
+      weeks.forEach((wk,wi)=>{ for(const c of wk){ if(c.inQ&&c.day===1&&c.month!==prevM){prevM=c.month;monthLabels.push({weekIdx:wi,label:MONTH_NAMES[c.month].slice(0,3)});break;} } });
       return{weeks,monthLabels};
     },[selectedHabit]);
 
@@ -1197,9 +1248,15 @@ service cloud.firestore {
                 )}
 
                 {/* Year heatmap tab */}
-                {detailTab==='year' && (
+                {detailTab==='year' && (()=>{
+                  const qStartKey=toDateKey(getQuarterStart(todayDate));
+                  const qDays=Object.keys(selectedHabit.logs).filter(k=>k>=qStartKey&&selectedHabit.logs[k]).length;
+                  return(
                   <div className="bg-white border border-gray-100 rounded-2xl" style={{padding:'24px',overflowX:'auto'}}>
-                    <p className="text-sm font-semibold text-gray-700" style={{marginBottom:'16px'}}>Past 52 Weeks</p>
+                    <div style={{display:'flex',alignItems:'baseline',gap:'10px',marginBottom:'16px'}}>
+                      <p className="text-sm font-semibold text-gray-700">{getQuarterLabel(todayDate)}</p>
+                      <p className="text-xs text-gray-400">logs reset each quarter · totals preserved</p>
+                    </div>
                     <div style={{display:'flex',gap:'3px',marginBottom:'4px',paddingLeft:'24px'}}>
                       {heatmapData.weeks.map((_,wi)=>{
                         const ml=heatmapData.monthLabels.find(m=>m.weekIdx===wi);
@@ -1216,19 +1273,20 @@ service cloud.firestore {
                         {heatmapData.weeks.map((wk,wi)=>(
                           <div key={wi} style={{display:'flex',flexDirection:'column',gap:'3px'}}>
                             {wk.map((cell,di)=>(
-                              <div key={di} title={cell.key}
+                              <div key={di} title={cell.inQ?cell.key:''}
                                 style={{width:'13px',height:'13px',borderRadius:'3px',
-                                  background:cell.isFuture?'#f9fafb':cell.done?color.hex:'#ebedf0'}} />
+                                  background:!cell.inQ?'transparent':cell.isFuture?'#f9fafb':cell.done?color.hex:'#ebedf0'}} />
                             ))}
                           </div>
                         ))}
                       </div>
                     </div>
                     <p className="text-xs text-gray-400 text-center" style={{marginTop:'16px'}}>
-                      {Object.values(selectedHabit.logs).filter(Boolean).length} total completed days
+                      {qDays} days completed this quarter · {selectedHabit.totalDays||0} total ever
                     </p>
                   </div>
-                )}
+                  );
+                })()}
               </>);
             })()}
           </>)}
