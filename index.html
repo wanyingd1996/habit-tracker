@@ -28,6 +28,14 @@
     .bg-orange-500{background-color:#f97316} .bg-orange-100{background-color:#ffedd5} .text-orange-700{color:#c2410c} .border-orange-400{border-color:#fb923c}
     .transition-all{transition:all 0.15s ease}
     .sidebar{width:256px;min-width:256px}
+    .mob-top-bar{display:none}
+    .mob-bottom-nav{display:none}
+    @media(max-width:639px){
+      .sidebar{display:none!important}
+      .mob-top-bar{display:flex;position:fixed;top:0;left:0;right:0;height:52px;background:white;border-bottom:1px solid #e5e7eb;align-items:center;padding:0 16px;gap:10px;z-index:40;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+      .mob-bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #e5e7eb;z-index:40;padding-bottom:env(safe-area-inset-bottom,0px)}
+      .main-scroll{padding:60px 14px 82px!important}
+    }
   </style>
 </head>
 <body class="bg-gray-50">
@@ -156,6 +164,7 @@
     const [newColorIdx, setNewColorIdx]= useState(3);
     const [view, setView]              = useState('home');
     const [detailTab, setDetailTab]    = useState('calendar');
+    const [isMobile, setIsMobile]      = useState(()=>window.innerWidth<640);
 
     // Auth / sync state
     const [authStatus, setAuthStatus]  = useState('loading'); // loading|no-config|signed-out|signed-in
@@ -446,6 +455,13 @@
       return()=>clearInterval(timerIntervalRef.current);
     },[timerPhase]);
 
+    // Mobile resize listener
+    useEffect(()=>{
+      const fn=()=>setIsMobile(window.innerWidth<640);
+      window.addEventListener('resize',fn);
+      return()=>window.removeEventListener('resize',fn);
+    },[]);
+
     // Sessions log load
     useEffect(()=>{
       if(view!=='calendar'||detailTab!=='sessions') return;
@@ -568,6 +584,62 @@
     },[selectedHabit]);
 
     // ── Sub-components ────────────────────────────────────────────
+    function MobileTopBar() {
+      return (
+        <div className="mob-top-bar">
+          <span style={{fontSize:'20px'}}>🗓️</span>
+          <span style={{flex:1,fontSize:'15px',fontWeight:700,color:'#111827'}}>Habit Tracker</span>
+          {authStatus==='signed-in' && (
+            <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+              <SyncDot />
+              {user?.photoURL
+                ? <img src={user.photoURL} width="28" height="28" style={{borderRadius:'50%',border:'2px solid #e5e7eb'}} alt="" />
+                : <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'}}>👤</div>
+              }
+            </div>
+          )}
+          {authStatus==='signed-out' && (
+            <button onClick={signIn} style={{padding:'6px 12px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'white',fontSize:'12px',fontWeight:500,color:'#374151',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="14" height="14" alt="G" />
+              Sign in
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    function MobileBottomNav() {
+      if(authStatus!=='signed-in') return null;
+      const isHome=view==='home';
+      const isTimer=timerPhase==='running'||timerPhase==='break';
+      return (
+        <div className="mob-bottom-nav">
+          <button onClick={()=>{setView('home');}} style={{flex:1,padding:'10px 4px 10px',border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',color:isHome?'#111827':'#9ca3af'}}>
+            <span style={{fontSize:'20px'}}>🏠</span>
+            <span style={{fontSize:'10px',fontWeight:isHome?700:400}}>Home</span>
+          </button>
+          {view==='calendar' && selectedHabit && (
+            <button onClick={()=>setView('home')} style={{flex:1,padding:'10px 4px',border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',color:'#9ca3af'}}>
+              <span style={{fontSize:'20px'}}>◀</span>
+              <span style={{fontSize:'10px'}}>Back</span>
+            </button>
+          )}
+          <button onClick={()=>{if(!isTimer&&timerPhase!=='selecting')setTimerPhase('selecting');}} disabled={isTimer}
+            style={{flex:1,padding:'10px 4px',border:'none',background:'none',cursor:isTimer?'default':'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',
+              color:isTimer?'#ef4444':'#9ca3af'}}>
+            <span style={{fontSize:'20px'}}>🍅</span>
+            <span style={{fontSize:'10px',fontWeight:isTimer?700:400,color:isTimer?'#ef4444':'#9ca3af'}}>
+              {timerPhase==='running'?fmt(timerSecondsLeft):timerPhase==='break'?`☕${fmt(timerSecondsLeft)}`:'Timer'}
+            </span>
+          </button>
+          <button onClick={()=>setShowModal(true)} style={{flex:1,padding:'10px 4px',border:'none',background:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',color:'#9ca3af'}}>
+            <span style={{fontSize:'20px'}}>➕</span>
+            <span style={{fontSize:'10px'}}>Add</span>
+          </button>
+        </div>
+      );
+    }
+
     function SyncDot() {
       if(syncStatus==='saving')  return <span style={{fontSize:'10px',color:'#9ca3af'}}>↑ saving…</span>;
       if(syncStatus==='synced')  return <span style={{fontSize:'10px',color:'#10b981'}}>✓ synced</span>;
@@ -608,16 +680,16 @@
 
       if(timerPhase==='running') return (
         <div className={`${tc.light} border ${tc.border} rounded-2xl`}
-          style={{display:'flex',alignItems:'center',gap:'16px',padding:'14px 20px',marginBottom:'24px',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
-          <span style={{fontSize:'24px'}}>🍅</span>
-          <div style={{flex:1}}>
-            <p className={`text-sm font-semibold ${tc.text}`}>
-              Working on: {th?.emoji} {th?.name}
-              {timerTagRef.current && <span style={{marginLeft:'8px',padding:'2px 8px',borderRadius:'99px',background:'rgba(0,0,0,0.08)',fontSize:'11px'}}>#{timerTagRef.current}</span>}
+          style={{display:'flex',alignItems:'center',gap:isMobile?'10px':'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
+          <span style={{fontSize:isMobile?'20px':'24px'}}>🍅</span>
+          <div style={{flex:1,minWidth:0}}>
+            <p className={`text-sm font-semibold ${tc.text}`} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {th?.emoji} {th?.name}
+              {!isMobile&&timerTagRef.current && <span style={{marginLeft:'8px',padding:'2px 8px',borderRadius:'99px',background:'rgba(0,0,0,0.08)',fontSize:'11px'}}>#{timerTagRef.current}</span>}
             </p>
-            <p className="text-xs text-gray-400" style={{marginTop:'2px'}}>{timerDurationRef.current}-min session · stay focused</p>
+            {!isMobile && <p className="text-xs text-gray-400" style={{marginTop:'2px'}}>{timerDurationRef.current}-min session · stay focused</p>}
           </div>
-          <span className={`text-3xl font-bold ${tc.text}`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
+          <span className={`${isMobile?'text-xl':'text-3xl'} font-bold ${tc.text}`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
           <button onClick={cancelAll} style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
         </div>
       );
@@ -655,13 +727,13 @@
       );
 
       if(timerPhase==='break') return (
-        <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:'16px',display:'flex',alignItems:'center',gap:'16px',padding:'14px 20px',marginBottom:'24px'}}>
-          <span style={{fontSize:'24px'}}>☕</span>
+        <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:'16px',display:'flex',alignItems:'center',gap:isMobile?'10px':'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px'}}>
+          <span style={{fontSize:isMobile?'20px':'24px'}}>☕</span>
           <div style={{flex:1}}>
             <p className="text-sm font-semibold text-blue-800">{breakDuration}-min break</p>
-            <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>Relax — notification when done</p>
+            {!isMobile && <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>Relax — notification when done</p>}
           </div>
-          <span className="text-3xl font-bold text-blue-700" style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
+          <span className={`${isMobile?'text-xl':'text-3xl'} font-bold text-blue-700`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
           <button onClick={()=>{clearInterval(timerIntervalRef.current);setTimerPhase('break-done');}}
             style={{padding:'7px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>⏭ Skip</button>
           <button onClick={cancelAll} style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
@@ -743,6 +815,8 @@ service cloud.firestore {
     // ── Main render ───────────────────────────────────────────────
     return (
       <div style={{display:'flex',minHeight:'100vh'}}>
+        <MobileTopBar />
+        <MobileBottomNav />
 
         {/* Sidebar */}
         <div className="sidebar bg-white border-r border-gray-200" style={{display:'flex',flexDirection:'column',height:'100vh',position:'sticky',top:0}}>
@@ -782,7 +856,7 @@ service cloud.firestore {
         </div>
 
         {/* Main content */}
-        <div style={{flex:1,padding:'32px',overflowY:'auto'}}>
+        <div className="main-scroll" style={{flex:1,padding:'32px',overflowY:'auto'}}>
 
           {/* Loading */}
           {authStatus==='loading' && (
@@ -803,21 +877,23 @@ service cloud.firestore {
 
             {/* ── Home view ── */}
             {view==='home' && (
-              <div style={{maxWidth:'760px'}}>
+              <div style={{maxWidth:isMobile?'100%':'760px'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'24px'}}>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">All Habits</h2>
-                    <p className="text-sm text-gray-400" style={{marginTop:'4px'}}>{MONTH_NAMES[todayDate.getMonth()]} {todayDate.getFullYear()} · tap any habit to open calendar</p>
+                    <p className="text-sm text-gray-400" style={{marginTop:'4px'}}>{MONTH_NAMES[todayDate.getMonth()]} {todayDate.getFullYear()}{isMobile?'':' · tap any habit to open calendar'}</p>
                   </div>
-                  <button onClick={()=>setTimerPhase('selecting')} disabled={timerPhase==='running'||timerPhase==='break'}
-                    style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 16px',borderRadius:'12px',border:'none',
-                      cursor:(timerPhase==='running'||timerPhase==='break')?'not-allowed':'pointer',
-                      background:(timerPhase==='running'||timerPhase==='break')?'#f3f4f6':'#111827',
-                      color:(timerPhase==='running'||timerPhase==='break')?'#9ca3af':'white',
-                      fontSize:'13px',fontWeight:600}}>
-                    <span style={{fontSize:'16px'}}>🍅</span>
-                    {timerPhase==='running'?fmt(timerSecondsLeft):timerPhase==='break'?`Break ${fmt(timerSecondsLeft)}`:'Start Pomodoro'}
-                  </button>
+                  {!isMobile && (
+                    <button onClick={()=>setTimerPhase('selecting')} disabled={timerPhase==='running'||timerPhase==='break'}
+                      style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 16px',borderRadius:'12px',border:'none',
+                        cursor:(timerPhase==='running'||timerPhase==='break')?'not-allowed':'pointer',
+                        background:(timerPhase==='running'||timerPhase==='break')?'#f3f4f6':'#111827',
+                        color:(timerPhase==='running'||timerPhase==='break')?'#9ca3af':'white',
+                        fontSize:'13px',fontWeight:600}}>
+                      <span style={{fontSize:'16px'}}>🍅</span>
+                      {timerPhase==='running'?fmt(timerSecondsLeft):timerPhase==='break'?`Break ${fmt(timerSecondsLeft)}`:'Start Pomodoro'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Weekly digest */}
@@ -827,7 +903,7 @@ service cloud.firestore {
                     {weeklyDigest.map(wd=>(
                       <div key={wd.id} style={{display:'flex',alignItems:'center',gap:'10px'}}>
                         <span style={{fontSize:'16px'}}>{wd.emoji}</span>
-                        <span style={{fontSize:'12px',color:'#6b7280',width:'90px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{wd.name}</span>
+                        <span style={{fontSize:'12px',color:'#6b7280',width:isMobile?'72px':'90px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{wd.name}</span>
                         <div style={{display:'flex',gap:'3px'}}>
                           {wd.days.map((d,i)=>(
                             <div key={i} style={{width:'22px',height:'22px',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',
@@ -854,6 +930,52 @@ service cloud.firestore {
                     const todayKey=toDateKey(todayDate);
                     const todaySess=h.lastSessionDate===todayKey?(h.todaySessions||0):0;
                     const target=h.dailyTarget||0;
+                    if(isMobile) return (
+                      <div key={h.id} className="bg-white border border-gray-100 rounded-2xl"
+                        style={{padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.06)'}}>
+                        {/* Row 1: icon + name + check */}
+                        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                          <div className={`rounded-xl ${c.bg}`} style={{width:'40px',height:'40px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                            <span style={{fontSize:'20px'}}>{h.emoji}</span>
+                          </div>
+                          <div style={{flex:1,minWidth:0}} onClick={()=>{setSelectedId(h.id);setView('calendar');setDetailTab('calendar');}}>
+                            <p className="text-sm font-semibold text-gray-900" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name}</p>
+                            {target>0
+                              ? <div style={{display:'flex',gap:'3px',marginTop:'3px',alignItems:'center'}}>
+                                  {Array.from({length:target},(_,i)=>(
+                                    <div key={i} style={{width:'7px',height:'7px',borderRadius:'50%',background:i<todaySess?c.hex:'#e5e7eb'}} />
+                                  ))}
+                                  <span style={{fontSize:'10px',color:'#9ca3af',marginLeft:'2px'}}>{todaySess}/{target} today</span>
+                                </div>
+                              : <p className="text-xs text-gray-400" style={{marginTop:'2px'}}>since {h.createdAt}</p>
+                            }
+                          </div>
+                          <button onClick={e=>{e.stopPropagation();toggleToday(h.id);}}
+                            style={{flexShrink:0,width:'38px',height:'38px',borderRadius:'50%',border:'2px solid',
+                              borderColor:doneToday?'transparent':'#d1d5db',
+                              background:doneToday?c.hex:'white',cursor:'pointer',
+                              display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+                            <span style={{color:doneToday?'white':'#d1d5db',fontWeight:'bold',fontSize:'14px'}}>✓</span>
+                          </button>
+                        </div>
+                        {/* Row 2: stats */}
+                        <div onClick={()=>{setSelectedId(h.id);setView('calendar');setDetailTab('calendar');}}
+                          style={{display:'flex',alignItems:'center',gap:'12px',marginTop:'10px',paddingTop:'10px',borderTop:'1px solid #f3f4f6',cursor:'pointer'}}>
+                          <span className={`text-sm font-bold ${c.text}`}>{h.totalDays||0} <span className="text-xs font-normal text-gray-400">days</span></span>
+                          <span className="text-sm font-bold text-gray-700">{s.streak>0?`${s.streak} 🔥`:'—'} <span className="text-xs font-normal text-gray-400">streak</span></span>
+                          <div style={{flex:1}}>
+                            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                              <span className="text-xs text-gray-400">{s.monthDone}/{s.monthTotal}</span>
+                              <span className={`text-xs font-semibold ${c.text}`}>{s.rate||0}%</span>
+                            </div>
+                            <div style={{height:'5px',borderRadius:'99px',background:'#f3f4f6',overflow:'hidden'}}>
+                              <div className={c.bg} style={{height:'100%',width:`${s.rate||0}%`,borderRadius:'99px'}} />
+                            </div>
+                          </div>
+                          <span className="text-gray-300" style={{fontSize:'16px'}}>›</span>
+                        </div>
+                      </div>
+                    );
                     return(
                       <div key={h.id} onClick={()=>{setSelectedId(h.id);setView('calendar');setDetailTab('calendar');}}
                         className="bg-white border border-gray-100 rounded-2xl transition-all"
@@ -910,18 +1032,20 @@ service cloud.firestore {
             {/* ── Detail view ── */}
             {view==='calendar' && selectedHabit && (()=>{
               return(<>
-                <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'28px'}}>
-                  <button onClick={()=>setView('home')} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                    style={{padding:'6px 10px',border:'none',background:'none',cursor:'pointer',fontSize:'13px'}}>← All Habits</button>
-                  <span style={{fontSize:'40px'}}>{selectedHabit.emoji}</span>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedHabit.name}</h2>
+                <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:isMobile?'16px':'28px'}}>
+                  {!isMobile && (
+                    <button onClick={()=>setView('home')} className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                      style={{padding:'6px 10px',border:'none',background:'none',cursor:'pointer',fontSize:'13px'}}>← All Habits</button>
+                  )}
+                  <span style={{fontSize:isMobile?'32px':'40px'}}>{selectedHabit.emoji}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <h2 className={`${isMobile?'text-xl':'text-2xl'} font-bold text-gray-900`} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selectedHabit.name}</h2>
                     <p className="text-sm text-gray-400">Since {selectedHabit.createdAt}</p>
                   </div>
                 </div>
 
                 {/* Stats */}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px',marginBottom:'16px'}}>
+                <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(3,1fr)',gap:isMobile?'10px':'16px',marginBottom:'16px'}}>
                   {[
                     {label:'Current Streak',    value:`${stats.streak} 🔥`,                  sub:'days in a row'},
                     {label:'Total Days',         value:stats.total,                            sub:'days logged ever'},
@@ -1110,8 +1234,8 @@ service cloud.firestore {
 
         {/* Add Habit Modal */}
         {showModal && (
-          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,padding:'16px'}}>
-            <div className="bg-white rounded-2xl" style={{width:'100%',maxWidth:'440px',padding:'24px',boxShadow:'0 25px 50px rgba(0,0,0,0.25)'}}>
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:isMobile?'flex-end':'center',justifyContent:'center',zIndex:50,padding:isMobile?'0':'16px'}}>
+            <div className="bg-white" style={{width:'100%',maxWidth:'440px',padding:'24px',boxShadow:'0 25px 50px rgba(0,0,0,0.25)',borderRadius:isMobile?'20px 20px 0 0':'16px',maxHeight:isMobile?'92vh':'none',overflowY:'auto',paddingBottom:isMobile?'calc(24px + env(safe-area-inset-bottom,0px))':'24px'}}>
               <h3 className="text-lg font-bold text-gray-900" style={{marginBottom:'20px'}}>Add New Habit</h3>
               <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
                 <div>
@@ -1158,8 +1282,8 @@ service cloud.firestore {
 
         {/* Pomodoro selecting modal */}
         {timerPhase==='selecting' && (
-          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,padding:'16px'}}>
-            <div className="bg-white rounded-2xl" style={{width:'100%',maxWidth:'420px',padding:'24px',boxShadow:'0 25px 50px rgba(0,0,0,0.25)'}}>
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:isMobile?'flex-end':'center',justifyContent:'center',zIndex:50,padding:isMobile?'0':'16px'}}>
+            <div className="bg-white" style={{width:'100%',maxWidth:'420px',padding:'24px',boxShadow:'0 25px 50px rgba(0,0,0,0.25)',borderRadius:isMobile?'20px 20px 0 0':'16px',maxHeight:isMobile?'92vh':'none',overflowY:'auto',paddingBottom:isMobile?'calc(24px + env(safe-area-inset-bottom,0px))':'24px'}}>
               <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'4px'}}>
                 <span style={{fontSize:'22px'}}>🍅</span>
                 <h3 className="text-lg font-bold text-gray-900">Start Pomodoro</h3>
