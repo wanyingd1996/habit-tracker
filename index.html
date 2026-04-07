@@ -465,6 +465,27 @@
       fireNotif('Session complete! 🍅',`+1 for ${h?.name}. Take a break!`);
     }
 
+    function discardSession() {
+      // Undo the totalSessions / todaySessions increment from recordSession
+      const habitId = timerHabitIdRef.current;
+      setHabitsRaw(prev=>{
+        const next=prev.map(h=>{
+          if(h.id!==habitId) return h;
+          const newTotal=Math.max(0,(h.totalSessions||0)-1);
+          const newToday=Math.max(0,(h.todaySessions||0)-1);
+          return {...h,totalSessions:newTotal,todaySessions:newToday,
+            lastSessionDate:newToday===0?'':h.lastSessionDate};
+        });
+        habitsRef.current=next;
+        const upd=next.find(h=>h.id===habitId);
+        if(upd) saveHabit(upd);
+        return next;
+      });
+      sessionCountRef.current[habitId]=Math.max(0,(sessionCountRef.current[habitId]||1)-1);
+      setPendingSession(null); setSessionNote('');
+      setTimerPhase('idle'); setTimerHabitId(null); setTimerSecondsLeft(25*60);
+    }
+
     function startBreak() {
       const count=sessionCountRef.current[timerHabitIdRef.current]||0;
       const dur=count%4===0?15:5;
@@ -782,8 +803,12 @@
               ▶ Next Session
             </button>
             <button onClick={async()=>{await saveCurrentNote(sessionNote);cancelAll();}}
-              style={{padding:'7px 14px',borderRadius:'10px',border:'1px solid #d1fae5',background:'white',color:'#374151',fontSize:'12px',cursor:'pointer',marginLeft:'auto'}}>
+              style={{padding:'7px 14px',borderRadius:'10px',border:'1px solid #d1fae5',background:'white',color:'#374151',fontSize:'12px',cursor:'pointer'}}>
               {sessionNote.trim()?'✓ Save & Done':'Skip & Done'}
+            </button>
+            <button onClick={discardSession}
+              style={{padding:'7px 14px',borderRadius:'10px',border:'1px solid #fecaca',background:'white',color:'#ef4444',fontSize:'12px',cursor:'pointer'}}>
+              🗑 Discard
             </button>
           </div>
         </div>
