@@ -277,6 +277,31 @@
           appHabitIdsRef.current = appData.habitIds || [];
         }
 
+        // Repair todaySessions: recompute from actual session records in case
+        // the stored counter got out of sync (runs every load, cheap — 1 doc/habit)
+        try {
+          const todayKey = toDateKey(todayDate);
+          const mk = todayKey.slice(0,7);
+          const hSnap = await db.collection(`users/${uid}/habits`).get();
+          const repairBatch = db.batch();
+          let dirty = false;
+          for (const hDoc of hSnap.docs) {
+            const h = hDoc.data();
+            const stored = h.lastSessionDate===todayKey ? (h.todaySessions||0) : 0;
+            const sesSnap = await db.doc(`users/${uid}/habits/${h.id}/sessions/${mk}`).get();
+            const records = sesSnap.exists ? (sesSnap.data().records||[]) : [];
+            const actual  = records.filter(r=>(r.endedAt||'').startsWith(todayKey)).length;
+            if (stored !== actual) {
+              repairBatch.update(habitRef(uid, h.id), {
+                todaySessions:  actual,
+                lastSessionDate: actual>0 ? todayKey : (h.lastSessionDate||''),
+              });
+              dirty = true;
+            }
+          }
+          if (dirty) await repairBatch.commit();
+        } catch(e) { console.error('repair todaySessions', e); }
+
         // Quarterly cleanup: runs once per quarter on first load
         const currentQ = getQuarterKey(todayDate);
         if ((appData?.lastCleanupQuarter || '') !== currentQ) {
