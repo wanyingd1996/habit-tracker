@@ -312,10 +312,31 @@
             appHabitIdsRef.current = defs.map(h=>h.id);
           } else if (serverHabits.length > 0) {
             initializedRef.current = true;
+            // Merge server data with local — never let a stale snapshot overwrite
+            // session-count fields that are newer in local state
+            const local = habitsRef.current;
+            const merged = serverHabits.map(sh => {
+              const lh = local.find(h => h.id === sh.id);
+              if (!lh) return sh;
+              const ld = lh.lastSessionDate || '';
+              const sd = sh.lastSessionDate || '';
+              if (ld > sd) {
+                // Local has a newer session date — keep local counts
+                return {...sh, totalSessions: lh.totalSessions, todaySessions: lh.todaySessions, lastSessionDate: lh.lastSessionDate};
+              }
+              if (ld === sd) {
+                // Same date (e.g. two devices used today) — take the higher counts
+                return {...sh,
+                  totalSessions: Math.max(lh.totalSessions||0, sh.totalSessions||0),
+                  todaySessions: Math.max(lh.todaySessions||0, sh.todaySessions||0),
+                };
+              }
+              return sh; // server is newer — use server as-is
+            });
             // Sort by saved order
             const ids = appHabitIdsRef.current;
-            const ordered = ids.map(id => serverHabits.find(h=>h.id===id)).filter(Boolean);
-            const extra   = serverHabits.filter(h => !ids.includes(h.id));
+            const ordered = ids.map(id => merged.find(h=>h.id===id)).filter(Boolean);
+            const extra   = merged.filter(h => !ids.includes(h.id));
             const all     = [...ordered, ...extra];
             habitsRef.current = all;
             setHabitsRaw(all);
