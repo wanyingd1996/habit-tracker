@@ -290,7 +290,7 @@
             const stored = h.lastSessionDate===todayKey ? (h.todaySessions||0) : 0;
             const sesSnap = await db.doc(`users/${uid}/habits/${h.id}/sessions/${mk}`).get();
             const records = sesSnap.exists ? (sesSnap.data().records||[]) : [];
-            const actual  = records.filter(r=>(r.endedAt||'').startsWith(todayKey)).length;
+            const actual  = records.filter(r=>r.endedAt&&toDateKey(new Date(r.endedAt))===todayKey).length;
             if (stored !== actual) {
               repairBatch.update(habitRef(uid, h.id), {
                 todaySessions:  actual,
