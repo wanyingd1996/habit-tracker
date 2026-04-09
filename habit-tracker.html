@@ -1288,7 +1288,7 @@ service cloud.firestore {
                     )}
                     {!sessionsLoading && loadedSessions.length>0 && (()=>{
                       const byDate=loadedSessions.reduce((acc,s)=>{
-                        const d=(s.endedAt||'').slice(0,10); if(!acc[d]) acc[d]=[]; acc[d].push(s); return acc;
+                        const d=s.endedAt?toDateKey(new Date(s.endedAt)):''; if(!acc[d]) acc[d]=[]; acc[d].push(s); return acc;
                       },{});
                       return(
                         <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
