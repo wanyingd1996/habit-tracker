@@ -475,6 +475,45 @@
       try{ new Notification(title,{body}); }catch{}
     }
 
+    // Play a short chime using Web Audio API (no external files needed)
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        if (type === 'session') {
+          // Three ascending tones: ding ding ding ✓
+          [[0, 660, 0.15], [0.18, 880, 0.15], [0.36, 1100, 0.2]].forEach(([t, freq, dur]) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine'; osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, ctx.currentTime + t);
+            g.gain.linearRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
+            osc.start(ctx.currentTime + t);
+            osc.stop(ctx.currentTime + t + dur + 0.05);
+          });
+        } else {
+          // Two gentle descending tones for break-done
+          [[0, 880, 0.2], [0.25, 660, 0.25]].forEach(([t, freq, dur]) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine'; osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, ctx.currentTime + t);
+            g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
+            osc.start(ctx.currentTime + t);
+            osc.stop(ctx.currentTime + t + dur + 0.05);
+          });
+        }
+        // Close context after sounds finish
+        setTimeout(() => ctx.close(), 1000);
+      } catch(e) {}
+    }
+
     // ── Pomodoro ──────────────────────────────────────────────────
     const fmt = s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
@@ -575,7 +614,7 @@
       timerIntervalRef.current=setInterval(()=>{
         const left=Math.max(0,Math.round((timerEndTimeRef.current-Date.now())/1000));
         setTimerSecondsLeft(left);
-        if(left===0){ clearInterval(timerIntervalRef.current); recordSession(timerHabitIdRef.current); setTimerPhase('done'); }
+        if(left===0){ clearInterval(timerIntervalRef.current); playSound('session'); recordSession(timerHabitIdRef.current); setTimerPhase('done'); }
       },500);
       return()=>clearInterval(timerIntervalRef.current);
     },[timerPhase]);
@@ -587,6 +626,7 @@
         setTimerSecondsLeft(left);
         if(left===0){
           clearInterval(timerIntervalRef.current);
+          playSound('break');
           fireNotif('Break over! 🎯','Ready for the next session?');
           setTimerPhase('break-done');
         }
