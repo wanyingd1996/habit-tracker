@@ -551,6 +551,19 @@
       if(canSave()) await fsWriteSession(userRef.current.uid, record).catch(console.error);
     }
 
+    function pauseTimer() {
+      clearInterval(timerIntervalRef.current);
+      // timerSecondsLeft already holds the remaining seconds — just freeze it
+      setTimerPhase(prev => prev === 'running' ? 'paused' : 'break-paused');
+    }
+    function resumeTimer() {
+      setTimerSecondsLeft(prev => {
+        timerEndTimeRef.current = Date.now() + prev * 1000;
+        return prev;
+      });
+      setTimerPhase(prev => prev === 'paused' ? 'running' : 'break');
+    }
+
     function cancelAll() {
       clearInterval(timerIntervalRef.current);
       setTimerPhase('idle'); setTimerHabitId(null);
@@ -827,18 +840,22 @@
       const count=sessionCountRef.current[timerHabitId]||0;
       const nextBreak=count%4===0&&count>0?15:5;
 
-      if(timerPhase==='running') return (
+      if(timerPhase==='running'||timerPhase==='paused') return (
         <div className={`${tc.light} border ${tc.border} rounded-2xl`}
           style={{display:'flex',alignItems:'center',gap:isMobile?'10px':'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
-          <span style={{fontSize:isMobile?'20px':'24px'}}>🍅</span>
+          <span style={{fontSize:isMobile?'20px':'24px'}}>{timerPhase==='paused'?'⏸':'🍅'}</span>
           <div style={{flex:1,minWidth:0}}>
             <p className={`text-sm font-semibold ${tc.text}`} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
               {th?.emoji} {th?.name}
               {!isMobile&&timerTagRef.current && <span style={{marginLeft:'8px',padding:'2px 8px',borderRadius:'99px',background:'rgba(0,0,0,0.08)',fontSize:'11px'}}>#{timerTagRef.current}</span>}
             </p>
-            {!isMobile && <p className="text-xs text-gray-400" style={{marginTop:'2px'}}>{timerDurationRef.current}-min session · stay focused</p>}
+            {!isMobile && <p className="text-xs text-gray-400" style={{marginTop:'2px'}}>{timerPhase==='paused'?'Paused — tap ▶ to resume':`${timerDurationRef.current}-min session · stay focused`}</p>}
           </div>
           <span className={`${isMobile?'text-xl':'text-3xl'} font-bold ${tc.text}`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
+          {timerPhase==='paused'
+            ? <button onClick={resumeTimer} style={{padding:'6px 12px',borderRadius:'10px',border:`1px solid`,borderColor:tc.hex,background:'white',color:tc.hex,fontSize:'13px',fontWeight:600,cursor:'pointer'}}>▶ Resume</button>
+            : <button onClick={pauseTimer} style={{padding:'6px 12px',borderRadius:'10px',border:'1px solid #d1d5db',background:'white',color:'#6b7280',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>⏸ Pause</button>
+          }
           <button onClick={cancelAll} style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
         </div>
       );
@@ -875,16 +892,20 @@
         </div>
       );
 
-      if(timerPhase==='break') return (
+      if(timerPhase==='break'||timerPhase==='break-paused') return (
         <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:'16px',display:'flex',alignItems:'center',gap:isMobile?'10px':'16px',padding:isMobile?'12px 14px':'14px 20px',marginBottom:'16px'}}>
-          <span style={{fontSize:isMobile?'20px':'24px'}}>☕</span>
+          <span style={{fontSize:isMobile?'20px':'24px'}}>{timerPhase==='break-paused'?'⏸':'☕'}</span>
           <div style={{flex:1}}>
             <p className="text-sm font-semibold text-blue-800">{breakDuration}-min break</p>
-            {!isMobile && <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>Relax — notification when done</p>}
+            {!isMobile && <p className="text-xs text-blue-500" style={{marginTop:'2px'}}>{timerPhase==='break-paused'?'Paused — tap ▶ to resume':'Relax — notification when done'}</p>}
           </div>
           <span className={`${isMobile?'text-xl':'text-3xl'} font-bold text-blue-700`} style={{fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{fmt(timerSecondsLeft)}</span>
+          {timerPhase==='break-paused'
+            ? <button onClick={resumeTimer} style={{padding:'6px 12px',borderRadius:'10px',border:'1px solid #93c5fd',background:'white',color:'#1d4ed8',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>▶ Resume</button>
+            : <button onClick={pauseTimer} style={{padding:'6px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#6b7280',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>⏸ Pause</button>
+          }
           <button onClick={()=>{clearInterval(timerIntervalRef.current);setTimerPhase('break-done');}}
-            style={{padding:'7px 12px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>⏭ Skip</button>
+            style={{padding:'6px 10px',borderRadius:'10px',border:'1px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>⏭ Skip</button>
           <button onClick={cancelAll} style={{background:'none',border:'none',cursor:'pointer',fontSize:'18px',color:'#9ca3af',padding:'4px 8px'}}>✕</button>
         </div>
       );
